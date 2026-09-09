@@ -58,7 +58,7 @@ DependabotはSHAとコメントの両方を更新します。
 
 ワークフローは既定でGitHubがホストする`ubuntu-latest`で動きます。
 セルフホストのランナーがある場合は、リポジトリまたは組織の変数`RUNS_ON`に、ランナーのラベル（例: `self-hosted`）を設定します。
-設定は「Settings」→「Secrets and variables」→「Actions」の「Variables」にあるほか、`scripts/setup.sh --runs-on ラベル`でも行えます。
+設定は「Settings」→「Secrets and variables」→「Actions」の「Variables」にあるほか、`scripts/setup.ps1 -RunsOn ラベル`でも行えます。
 変数が無いときは`ubuntu-latest`に倒れるため、設定しなくても動きます。
 
 セルフホストのランナーには、`git`と`gh`（GitHub CLI）、Dockerが要ります。

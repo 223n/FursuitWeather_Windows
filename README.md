@@ -46,6 +46,20 @@
 
 `C#`のプロジェクトはまだ無いため、いまはNode.jsだけで足ります。
 
+### リポジトリの初期設定
+
+テンプレートから作った直後の設定を`scripts/setup.ps1`がまとめて行います。
+PowerShell 7以上と、ログイン済みの`gh`（GitHub CLI）が要ります。
+
+```powershell
+./scripts/setup.ps1                    # 設定をまとめて行う
+./scripts/setup.ps1 -RunsOn self-hosted # セルフホストのランナーも設定する
+./scripts/setup.ps1 -DryRun            # 何をするかを表示するだけ
+```
+
+何度実行しても結果は同じで、失敗した項目は最後にまとめて表示します。
+`Get-Help ./scripts/setup.ps1 -Full`で詳しい説明を読めます。
+
 ### 日本語の文書を検査する
 
 Markdownの書式を`markdownlint`で、日本語の書き方を`textlint`で検査します。
