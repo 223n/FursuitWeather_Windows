@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Windows に依存させない。TargetFramework に -windows の接尾辞を付けないことで、
+    WPF 側から参照できるうえに、Linux のランナーでもテストを回せる。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>
