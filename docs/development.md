@@ -127,11 +127,20 @@ runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-latest' }}
 タイムアウトも30分では足りなくなる見込みです。
 
 `zizmor`のジョブは`advanced-security: false`（101行目）のため、指摘が1件でもあると落ちます。
-シークレットを`run:`の中に`${{ secrets.* }}`で直接書くとtemplate injectionとして指摘されます。
-必ず`env:`を経由してください。
+実際に当たりやすいのは`unpinned-uses`と`cache-poisoning`です。
+新しく足すアクションは、既存の慣行どおりコミットSHAで固定し、版はコメントに書いてください。
+
+シークレットは`run:`の中に`${{ secrets.* }}`で直接書かず、`env:`を経由します。
+なお`template-injection`の監査が見るのは攻撃者が操作できるコンテキストで、`secrets`は対象外です。
+それでも`env:`を経由する運用はGitHubの公式の案内と一致するため、そのまま守ります。
+シェルへ渡すときは`${{ env.VAR }}`ではなく`${VAR}`で展開させてください。
 
 Windowsのビルドを必須のチェックにすると、ワークフローが開いたPull RequestのCIが承認待ちになり、`auto_merge`が止まります。
 必須にしないか、`auto_merge`を使わないかのどちらかを選びます。
+
+**インストーラーの生成は`ci.yml`に置きません。**
+`release-publish.yml`の側に置きます。
+必須のチェックにすると、いま述べた`auto_merge`の問題に当たるためです。
 
 ### Dependabotとラベル
 
@@ -183,6 +192,42 @@ gitがコミットのときに正規化するため、Visual StudioがCRLFで書
 混ぜるとこのジョブが落ちます。
 足すなら`lint`とは別の名前にします。
 
+## インストーラーのビルド
+
+配布方式の根拠は[技術選定](stack.md)の「配布方式」にあります。
+
+定義は`installer/FursuitWeather.iss`に置きます。
+要点は次のとおりです。
+
+- `AppId`は生成したGUIDを固定し、以後変えません。変えると別のアプリとして二重に入ります
+- `AppVersion`には完全なsemverを入れます（`1.2.0-rc.1`）
+- `VersionInfoVersion`には4桁の数値を入れます（`1.2.0.0`）
+- `PrivilegesRequired=lowest`にします。`PrivilegesRequiredOverridesAllowed`は空欄のままにします
+- `[Run]`で`WindowsAppRuntimeInstall.exe --quiet`を実行します
+
+### リリースへの組み込み
+
+`release-publish.yml`を3つのジョブに割ります。
+
+1. `publish`（Ubuntu、既存を縮小）。タグを打つところまでを行います
+1. `installer`（Windows、新設）。`dotnet publish`と`iscc`を実行し、チェックサムを作って成果物として上げます
+1. `release`（Ubuntu、新設）。成果物を取り、GitHub Releaseを作ります。既存の「mainをdevelopへ戻す」もここへ移します
+
+**`publish`ジョブにはjob levelの`outputs`がありません。**
+このままでは版を後続のジョブへ渡せないため、`release.yml`の`prepare`ジョブと同じ形で足します。
+
+`installer`ジョブには`defaults`で`shell: bash`を指定します。
+既存のステップがPOSIXのシェルを前提にしており、Windowsのランナーの既定は`pwsh`のためです。
+
+版の決定は`release.yml`が使っているのと同じ`node -p "require('./package.json').version"`にします。
+`Directory.Build.props`から読む方式は未検証のため、CIの版の決定をそこに依存させません。
+
+`iscc`がランナーのPATHに載っているかは未確認です。
+載っていなければフルパスで叩きます。
+
+ビルド時間は3分から6分と**推定**します。
+ツールの導入が要らないためですが、実測ではありません。
+
 ## 署名と配布
 
 ### 自分の端末だけの段階
@@ -197,6 +242,10 @@ gitがコミットのときに正規化するため、Visual StudioがCRLFで書
 - 拡張検証（EV）の証明書でもSmartScreenを素通りできなくなりました
 - 未署名だとリリースのたびに評判がゼロに戻ります
 - Smart App Controlが有効な端末では、起動そのものを止められる可能性があります
+
+第一候補はSignPath Foundationです。
+鍵の素材をCIへ置かずに済みます。
+ただし申請の条件に「すでにリリース済みであること」が含まれるため、**初回は未署名で出し、そのあと申請し、通ったらCIへ組み込む**という順序になります。
 
 選択肢は次の3つです。
 
