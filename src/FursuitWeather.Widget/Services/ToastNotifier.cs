@@ -186,6 +186,39 @@ public sealed class ToastNotifier : IDisposable
         _registered = false;
     }
 
+    /// <summary>
+    /// この端末からこのアプリの通知の登録を消す。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>アンインストールのときだけ呼ぶ。</b>
+    /// 終了のたびに呼ぶ <see cref="Shutdown"/> と違い、
+    /// 通知センターに残っている過去の通知ごと消える。
+    /// </para>
+    /// <para>
+    /// ランタイムが先に消えていると例外になる。
+    /// アンインストールを止めないため、握りつぶす。
+    /// </para>
+    /// <para>
+    /// <b>登録が無いときは <see cref="FileNotFoundException"/> が飛ぶ。</b>
+    /// WinRT のHRESULTがそう写るためで、実機で確認している。
+    /// これを捕まえ損ねると、アンインストールの後始末が1行も走らずにプロセスが落ち、
+    /// 自動起動の登録が端末に残る。
+    /// </para>
+    /// </remarks>
+    public static void UnregisterAll()
+    {
+        try
+        {
+            AppNotificationManager.Default.UnregisterAll();
+        }
+        catch (Exception e) when (e is COMException or InvalidOperationException
+            or TypeInitializationException or DllNotFoundException or FileNotFoundException)
+        {
+            // 消せなくてもアンインストールは続ける
+        }
+    }
+
     /// <summary>通知のアイコンの場所。</summary>
     private static Uri IconUri()
     {

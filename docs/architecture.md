@@ -26,6 +26,8 @@ FursuitWeather_Windows/
 ├── Directory.Build.props           # package.jsonから版を読む。共通の設定を集約する
 ├── Directory.Packages.props        # 依存パッケージの版を集約する
 ├── FursuitWeather.Windows.slnx     # SDK 10 が作る新しい形式のソリューション
+├── installer/
+│   └── FursuitWeather.iss          # Inno Setup の定義。組み立ては scripts/build-installer.ps1
 ├── src/
 │   ├── FursuitWeather.Core/        # net10.0（Windowsに依存しない）
 │   │   ├── Api/                    # HttpClientによる取得、座標の丸め
@@ -284,6 +286,28 @@ APIが返したラベルをそのまま運びます。
 実機で確認したところ、値が残ったまま無効になっている例も、値が無いのに無効のフラグだけが残っている例もありました。
 有効にするときは、このフラグも消します。
 
+### 設定の読み書き
+
+**JSONとして読めることと、値として使えることは別です。**
+
+範囲の外の座標は読み込みを素通りし、`Coordinate`を作る時点で例外になります。
+起動の経路でそれが起きると、小窓とトレイのどちらも出ないまま落ちます。
+設定は起動のたびに読むため、以後その端末では毎回落ち続けます。
+`%LOCALAPPDATA%`はACLで保護されず、設定は利用者が編集できる場所にあります。
+
+読み込んだあとに値域を確かめ、通らなければ既定へ落とします。
+**座標を戻すときは表示名も戻します。**
+「札幌」と出したまま東京の判定を見せるほうが危ないためです。
+
+書くときは通知の状態と同じく、いったん別名で書いてから置き換えます。
+`WriteAllText`は先に中身を切り詰めるため、電源断と重なると途中で切れたJSONが残ります。
+小窓を動かすたびに書き直すため、その窓に当たる機会は少なくありません。
+
+拾えなかった例外は`DispatcherUnhandledException`で受けます。
+記録を`crash.txt`へ残し、画面にも出してから終えます。
+小窓はタスクバーに出ず、Alt+Tabにも現れません。
+黙って落ちると「起動しなかった」としか見えず、手がかりが残りません。
+
 ### 小窓の位置
 
 保存した位置を復元する前に、**十分に画面へ入るかを必ず確かめます。**
@@ -319,6 +343,82 @@ Windows App SDKのランタイムは消しません。
 
 アンインストーラーは本体を非昇格で1回起動し、`UnregisterAll`を呼ばせます。
 アプリが壊れて起動できない場合に備え、レジストリを直接消す退避の経路も用意します。
+
+#### 組み立て方
+
+定義は`installer/FursuitWeather.iss`、手順は`scripts/build-installer.ps1`にあります。
+
+```powershell
+./scripts/build-installer.ps1              # 配布用
+./scripts/build-installer.ps1 -SkipRuntime # 組み立ての確認だけ。速いが配れない
+```
+
+Inno Setupの場所は決め打ちにしません。
+`windows-2025`のランナーは`Program Files (x86)`の6系に、wingetで入れると`%LOCALAPPDATA%\Programs`の7系に入るためです。
+
+**`VersionInfoVersion`は数値しか受け付けません。**
+`AppVersion`は自由書式のため`0.3.0-rc.1`をそのまま通せますが、こちらは通りません。
+プレリリースの識別子を落とした値を別に渡しています。
+
+リリースのときは`.github/workflows/installer.yml`が同じスクリプトを回し、できたものをGitHub Releaseへ添えます。
+組み立てに関わるファイルを触ったPRでも、ランタイムを同梱しない速い形で1回通します。
+
+#### 実機で確かめたこと
+
+2026年9月9日、`0.3.0-rc.1`で入れて消すところまで通しました。
+
+| 見たところ | 結果 |
+| ---- | ---- |
+| 昇格 | 求められません。ログに`User privileges: None`と`Administrative install mode: No`が出ます |
+| 配置先 | `%LOCALAPPDATA%\Programs\FursuitWeather`（450ファイル、222.3MB） |
+| ランタイムの連鎖インストール | 終了コード0。すでに新しい版がある端末でも通ります |
+| 通知 | 入れた先から起動して`shown=2` |
+| アンインストール | 配置先・Runキー・`StartupApproved`・ショートカット・登録がすべて消えます |
+| 利用者データ | 残ります（設計どおり） |
+
+#### 踏んだ落とし穴
+
+**`Application.StartupUri`にnullを代入できません。**
+`ArgumentNullException`が飛びます。
+小窓を出さずに後始末だけを行うつもりで書いたところ、後始末が1行も走らないまま落ちました。
+`Environment.Exit(0)`で即座に終えます。
+
+**`AppNotificationManager.UnregisterAll()`は、登録が無いと`FileNotFoundException`を投げます。**
+WinRTのHRESULTがそう写ります。
+COM例外だけを捕まえていたため、ここで落ちて自動起動の登録が端末に残りました。
+
+この2つはどちらも「アンインストールは成功したように見えるのに、端末に残る」形で現れます。
+**そのためInno側で終了コードを記録します。**
+`[UninstallRun]`は終了コードを見ないため、`CurUninstallStepChanged`から`Exec`して`Log`へ残します。
+同じ理由で、ランタイムの連鎖インストールの結果も記録します。
+
+**Innoは行頭が`[`の行をセクションの見出しとして読みます。**
+`Format`の配列引数を次の行へ送ると`Invalid section tag`になります。
+`Cardinal`と`BoolToStr`もPascal Scriptにはありません。
+
+#### 本体に頼らない退避の経路
+
+自動起動の登録は、**本体を起動せずにレジストリから直接消します。**
+
+ブートストラッパーは`ModuleInitializer`から走ります。
+ランタイムが無い端末では`Main`へ到達せずに終わるため、`--uninstall-cleanup`は1行も動きません。
+そのままだと、消えた`exe`をサインインのたびにWindowsが起動しようとします。
+
+本体の起動は「通知の登録を消す」ためだけのbest-effortに格下げし、失敗しても後始末を続けます。
+本体を退避して実際に確かめました。
+
+```text
+後始末: 本体が無いため起動を飛ばす: ...\FursuitWeather.Widget.exe
+後始末: Run キーの値を直接消した
+後始末: StartupApproved のフラグを直接消した
+```
+
+#### Releaseは下書きで作ります
+
+`gh release create`に`--draft`を付け、インストーラーを添え終えてから公開します。
+
+先に公開すると、組み立てが落ちたときに「入れる手段の無い、通知済みのRelease」が残ります。
+公開状態は取り消せません。
 
 `%LOCALAPPDATA%`は`Program Files`と違い、ACLで保護されません。
 同じ利用者の権限で動く任意のプロセスが、実行ファイルを差し替えられます。

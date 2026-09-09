@@ -51,6 +51,8 @@ jobs:
     permissions:
       contents: write        # タグを打ち、Release を作る
       pull-requests: write   # main を develop へ戻す PR を開く
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -150,13 +152,17 @@ jobs:
             echo "::notice::Release ${TAG} はすでにある。作り直さない"
             exit 0
           fi
-          # 本文は PR のタイトルとラベルから自動で作る。分類は .github/release.yml で決める
-          args=(--verify-tag --title "${TAG}" --generate-notes)
+          # 本文は PR のタイトルとラベルから自動で作る。分類は .github/release.yml で決める。
+          #
+          # まず下書きで作る。公開するのはインストーラーを添え終えたあとである。
+          # 先に公開すると、組み立てが落ちたときに
+          # 「入れる手段の無い、通知済みの Release」が残り、取り消せない
+          args=(--verify-tag --draft --title "${TAG}" --generate-notes)
           if [ "${PRERELEASE}" = 'true' ]; then
             args+=(--prerelease)
           fi
           gh release create "${TAG}" "${args[@]}"
-          echo "- Release: $(gh release view "${TAG}" --json url --jq '.url')" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release（下書き）: $(gh release view "${TAG}" --json url --jq '.url')" >> "$GITHUB_STEP_SUMMARY"
 
       - name: mainをdevelopへ戻す
         # 版の更新を develop にも届ける。まず直接押し、保護されていて押せなければ PR を開く。
@@ -214,3 +220,33 @@ jobs:
           else
             echo "ブランチ ${BRANCH} はすでに無い"
           fi
+
+  installer:
+    name: インストーラーを作ってReleaseへ添える
+    # Release ができたあとに走らせる。先に走らせると添付先が無い
+    needs: publish
+    # GitHub の $/ 構文（自リポジトリ参照）は actionlint 1.7.12 がまだ理解しないため、./ のままにする
+    uses: ./.github/workflows/installer.yml # zizmor: ignore[self-repository] actionlint が $/ に未対応
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.publish.outputs.tag }}
+
+  finalize:
+    name: Releaseを公開する
+    # インストーラーが添え終わってから下書きを外す。
+    # ここまで来なければ Release は下書きのままで、利用者からは見えない
+    needs: [publish, installer]
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.publish.outputs.tag }}
+    steps:
+      - name: 下書きを外す
+        run: |
+          gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
+          url="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json url --jq '.url')"
+          echo "- Release: ${url}" >> "$GITHUB_STEP_SUMMARY"

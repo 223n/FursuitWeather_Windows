@@ -47,6 +47,14 @@ dotnet test --filter "FullyQualifiedName~ForecastParserTests"   # 単体で走�
 dotnet format --verify-no-changes
 ```
 
+配布用のインストーラーは次で作ります。
+Inno Setupが要ります。
+
+```powershell
+./scripts/build-installer.ps1              # 配布用（164.5MB、5分ほど）
+./scripts/build-installer.ps1 -SkipRuntime # 組み立ての確認だけ
+```
+
 `package.json`の`lint`に`dotnet format`を混ぜないでください。
 `ci.yml`の日本語LintのジョブはUbuntuで動き、`.NET`のSDKがありません。
 
@@ -141,5 +149,6 @@ git flow feature start 変更の名前
 ## まだ手を付けていないもの
 
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
-- インストーラー（`installer/`）と更新の仕組みは、文書だけで実装がありません
+- 更新の仕組み（3つのモード）は、文書だけで実装がありません
+- コード署名をしていません。SmartScreenの警告が出ます
 - トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります

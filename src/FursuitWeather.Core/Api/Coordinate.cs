@@ -55,6 +55,32 @@ public readonly record struct Coordinate
         Longitude = Round(longitude);
     }
 
+    /// <summary>
+    /// 例外を出さずに作る。
+    /// </summary>
+    /// <param name="latitude">緯度。</param>
+    /// <param name="longitude">経度。</param>
+    /// <param name="coordinate">作れたときの座標。</param>
+    /// <returns>作れたら true。</returns>
+    /// <remarks>
+    /// 端末に保存された設定など、利用者が編集しうる値を通すときに使う。
+    /// 範囲の外の値でそのまま構築すると例外になり、
+    /// 起動の経路で投げると小窓もトレイも出ないまま落ちる。
+    /// </remarks>
+    public static bool TryCreate(double latitude, double longitude, out Coordinate coordinate)
+    {
+        try
+        {
+            coordinate = new Coordinate(latitude, longitude);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            coordinate = default;
+            return false;
+        }
+    }
+
     /// <summary>クエリ文字列へ入れる形にする。</summary>
     /// <returns>小数2桁までの不変文化圏の表記。</returns>
     public string LatitudeText => Latitude.ToString("0.##", CultureInfo.InvariantCulture);

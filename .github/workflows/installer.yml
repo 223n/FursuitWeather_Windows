@@ -1,0 +1,163 @@
+name: インストーラーを作る
+
+# self-contained で発行し、Windows App SDK のランタイムを同梱して、
+# Inno Setup でひとつの exe にまとめる。
+#
+# 中身の手順は scripts/build-installer.ps1 にある。
+# ここに書くのは、どこで動かすかと、できたものをどこへ置くかだけである。
+#
+#   workflow_call     release-publish.yml から。tag を渡すと、その Release へ添付する
+#   workflow_dispatch 手で試すとき。Release へは添付せず、成果物として残す
+#   pull_request      組み立てに関わるファイルを触ったときの見張り
+#
+# pull_request のときはランタイムを同梱しない。
+# 111MB の取得と圧縮に時間がかかるわりに、確かめたいのは
+# 「発行が通るか」と「.iss が壊れていないか」だけだからである。
+#
+# Inno Setup は windows-2025 のランナーに 6 系が同梱されている。
+# 探す場所はスクリプトの側が持つ。セルフホストのランナーを使う場合は自分で入れる。
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: '添付先のタグ（例: v1.2.0）。空なら添付しない'
+        required: false
+        type: string
+        default: ''
+      skip_runtime:
+        description: 'Windows App SDK のランタイムを同梱しない'
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      skip_runtime:
+        description: 'Windows App SDK のランタイムを同梱しない（速いが配布には使えない）'
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'installer/**'
+      - 'scripts/build-installer.ps1'
+      - '.github/workflows/installer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 組み立てる
+    runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-2025' }}
+    # 発行だけで 200MB を超え、ランタイムの取得と圧縮が続く。既定の6時間は長すぎるが、
+    # 15分では足りないことがある
+    timeout-minutes: 45
+    permissions:
+      contents: write # Release へ添付する
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # タグが渡されたときは、その時点の内容で組み立てる。
+          # 呼び元がタグを打った直後に走るため、既定のブランチでは版がずれる
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+
+      - name: .NETを用意
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: 組み立てる
+        id: build
+        shell: pwsh
+        env:
+          # github.event_name は、workflow_call で呼ばれると「呼び元の」イベント名になる。
+          # release-publish.yml は pull_request(closed) で動くため、
+          # 人が release/* の PR をマージする通常のリリース経路でも 'pull_request' になり、
+          # ランタイムを同梱しないインストーラーが Release へ載っていた。
+          # tag が空かどうかで、本物の PR と呼び出しを見分ける
+          SKIP_RUNTIME: ${{ inputs.skip_runtime || (github.event_name == 'pull_request' && inputs.tag == '') }}
+        run: |
+          $params = @{}
+          if ($env:SKIP_RUNTIME -eq 'true') {
+            $params['SkipRuntime'] = $true
+          }
+          ./scripts/build-installer.ps1 @params
+
+      - name: アンインストールの後始末が落ちないことを確かめる
+        # 一度ここで落ちた。Application.StartupUri に null を代入して
+        # ArgumentNullException になり、後始末が1行も走らないまま
+        # 自動起動の登録が端末に残った。
+        #
+        # ランナーには Windows App SDK のランタイムが無いことがあり、
+        # そのときは 0 にならない。0xE0434352（.NET の未処理例外）だけを失敗とする。
+        # 落ちた原因が「例外を捕まえ損ねた」ことなら、必ずこの値になる
+        shell: pwsh
+        run: |
+          $exe = 'artifacts/publish/win-x64/FursuitWeather.Widget.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--uninstall-cleanup' -PassThru
+
+          # 待ち時間を必ず区切る。
+          # ランタイムが無いとブートストラッパーが案内の画面を出すことがあり、
+          # 画面の無い環境では閉じられずに戻ってこない。
+          # 実際にこのステップが45分の上限まで止まった
+          if (-not $p.WaitForExit(60000)) {
+            $p.Kill()
+            Write-Output "::error::--uninstall-cleanup が60秒で終わらなかった。アンインストールが止まる形の欠陥である"
+            exit 1
+          }
+
+          $p.WaitForExit()
+          $code = $p.ExitCode
+          Write-Output "終了コード: $code"
+          if ($code -eq -532462766) {
+            Write-Output "::error::--uninstall-cleanup が未処理の例外で落ちた（0xE0434352）。後始末が走っていない"
+            exit 1
+          }
+          if ($code -ne 0) {
+            Write-Output "::warning::--uninstall-cleanup の終了コードが $code。ランナーにランタイムが無い可能性がある"
+          }
+
+      - name: 成果物として残す
+        # 配れないもの（-noruntime）は残さない。置き場所を占めるだけで使い道がない
+        if: inputs.tag != '' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: installer-${{ steps.build.outputs.name }}
+          path: ${{ steps.build.outputs.path }}
+          # Release へ添付したあとも、しばらくは手元で確かめられるようにする
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: 同梱を確かめる
+        # 名前で見分ける。ランタイム未同梱のものは -noruntime が付く。
+        # ここを通さないと、通知が最初から出ない版が Release に載る
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          SETUP_NAME: ${{ steps.build.outputs.name }}
+        run: |
+          case "${SETUP_NAME}" in
+            *-noruntime.exe)
+              echo "::error::ランタイムを同梱していないインストーラーは Release へ添えない: ${SETUP_NAME}"
+              exit 1
+              ;;
+          esac
+          echo "同梱を確認した: ${SETUP_NAME}"
+
+      - name: Releaseへ添える
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          SETUP: ${{ steps.build.outputs.path }}
+          SIZE_MB: ${{ steps.build.outputs.size_mb }}
+        run: |
+          # --clobber を付ける。同じ版を作り直したときに、古い方が残らないようにする
+          gh release upload "${TAG}" "${SETUP}" --clobber
+          {
+            echo "- インストーラー: \`$(basename "${SETUP}")\`（${SIZE_MB} MB）"
+          } >> "$GITHUB_STEP_SUMMARY"
