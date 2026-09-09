@@ -97,13 +97,6 @@ Name: "desktopicon"; Description: "デスクトップにショートカットを
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{#AppName} を起動する"; Flags: nowait postinstall skipifsilent
 
-[UninstallRun]
-; 通知の登録と自動起動の値は、ファイルを消すだけでは残る。
-; 本体を昇格せずに1回起動して消させる。
-; ファイルを消す前に走らせる必要があるため、Flags に waituntilterminated を付ける
-Filename: "{app}\{#AppExeName}"; Parameters: "--uninstall-cleanup"; \
-  Flags: waituntilterminated runhidden skipifdoesntexist; RunOnceId: "FursuitWeatherCleanup"
-
 [Code]
 { Windows App SDK のランタイムを連鎖インストールする。
 
@@ -112,7 +105,9 @@ Filename: "{app}\{#AppExeName}"; Parameters: "--uninstall-cleanup"; \
 
   すでに新しい版が入っているときは 0x80073D06 が返る。これは失敗ではない。 }
 const
-  ERROR_PACKAGE_ALREADY_EXISTS = $80073D06;
+  { 0x80073D06 = ERROR_PACKAGE_ALREADY_EXISTS。
+    Inno の Integer は符号付き32ビットのため、負の値として書く }
+  ERROR_PACKAGE_ALREADY_EXISTS = -2146498810;
 
 function InstallRuntime(): Boolean;
 var
@@ -124,18 +119,64 @@ begin
   Installer := ExpandConstant('{tmp}\') + ExtractFileName('{#RuntimeInstaller}');
   if not FileExists(Installer) then
   begin
+    Log('ランタイム: 同梱したはずのファイルが無い: ' + Installer);
     Result := False;
     Exit;
   end;
 
+  Log('ランタイム: 実行する: ' + Installer + ' --quiet');
   if not Exec(Installer, '--quiet', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
+    Log('ランタイム: 起動できなかった');
     Result := False;
     Exit;
   end;
 
-  Result := (ResultCode = 0) or (Cardinal(ResultCode) = ERROR_PACKAGE_ALREADY_EXISTS);
+  Result := (ResultCode = 0) or (ResultCode = ERROR_PACKAGE_ALREADY_EXISTS);
+  { Format の配列引数を次の行へ送らないこと。
+    Inno は行頭が [ の行をセクションの見出しとして読むため、Invalid section tag になる }
+  if Result then
+    Log(Format('ランタイム: 終了コード %d。入った', [ResultCode]))
+  else
+    Log(Format('ランタイム: 終了コード %d。入らなかった', [ResultCode]));
+#else
+  Log('ランタイム: 同梱していないため飛ばす。このインストーラーは配布に使えない');
 #endif
+end;
+
+{ アンインストールのときに、通知の登録と自動起動の値を本体に消させる。
+
+  UninstallRun のセクションではなくここで呼ぶのは、終了コードを記録するためである。
+  あちらは本体が落ちても黙って先へ進むため、
+  自動起動の登録が端末に残ったままアンインストールが「成功」する。
+  実際にそれが起きた。
+
+  ファイルを消す前に走らせる必要があるため usUninstall で行う。 }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+  Exe: string;
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+
+  Exe := ExpandConstant('{app}\{#AppExeName}');
+  if not FileExists(Exe) then
+  begin
+    Log('後始末: 本体が無いため飛ばす: ' + Exe);
+    Exit;
+  end;
+
+  if not Exec(Exe, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Log('後始末: 本体を起動できなかった');
+    Exit;
+  end;
+
+  if ResultCode = 0 then
+    Log('後始末: 済んだ')
+  else
+    Log(Format('後始末: 終了コード %d で失敗した。通知の登録と自動起動の値が残っている可能性がある', [ResultCode]));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

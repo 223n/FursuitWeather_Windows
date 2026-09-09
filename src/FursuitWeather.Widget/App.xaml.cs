@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using FursuitWeather.Widget.Services;
 
@@ -22,12 +23,18 @@ public partial class App : Application
 
         if (e.Args.Contains(UninstallCleanupSwitch, StringComparer.Ordinal))
         {
-            // StartupUri を先に消す。base.OnStartup のあとで小窓が作られるため、
-            // ここで消さないとアンインストールの最中に画面が出る
-            StartupUri = null;
             RunUninstallCleanup();
-            Shutdown(0);
-            return;
+
+            // ここで即座に終える。
+            //
+            // StartupUri に null を代入して小窓を止める書き方は使えない。
+            // このプロパティは null を受け付けず、ArgumentNullException を投げる。
+            // 実際にそれで落ち、後始末が1行も走らないまま
+            // アンインストーラーが「終わった」と見なす状態を作っていた。
+            //
+            // Shutdown() でも足りない。OnStartup から戻ったあとに
+            // StartupUri が評価されるため、閉じる前に小窓が一瞬出る。
+            Environment.Exit(0);
         }
 
         base.OnStartup(e);
@@ -57,7 +64,37 @@ public partial class App : Application
     /// </remarks>
     private static void RunUninstallCleanup()
     {
-        ToastNotifier.UnregisterAll();
-        StartupRegistration.Remove();
+        Safely(ToastNotifier.UnregisterAll);
+        Safely(StartupRegistration.Remove);
+    }
+
+    /// <summary>
+    /// 何が起きても呼び出し元へ例外を返さない。
+    /// </summary>
+    /// <param name="step">実行する後始末。</param>
+    /// <remarks>
+    /// <para>
+    /// それぞれの処理も自前で例外を捕まえるが、そちらは種類を並べて書いている。
+    /// 並べ損ねた種類が1つあるだけで、後続の後始末が丸ごと走らなくなる。
+    /// 実際に <c>UnregisterAll</c> の <see cref="FileNotFoundException"/> で
+    /// 自動起動の登録が消し残った。
+    /// </para>
+    /// <para>
+    /// ここは後始末専用の経路で、失敗しても続けるのが常に正しい。
+    /// そのため型を絞らずに受ける。
+    /// </para>
+    /// </remarks>
+    private static void Safely(Action step)
+    {
+#pragma warning disable CA1031 // 後始末はどの例外でも止めない
+        try
+        {
+            step();
+        }
+        catch (Exception)
+        {
+            // 消せなくてもアンインストールは続ける
+        }
+#pragma warning restore CA1031
     }
 }

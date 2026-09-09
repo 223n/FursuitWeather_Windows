@@ -83,6 +83,28 @@ jobs:
           }
           ./scripts/build-installer.ps1 @params
 
+      - name: アンインストールの後始末が落ちないことを確かめる
+        # 一度ここで落ちた。Application.StartupUri に null を代入して
+        # ArgumentNullException になり、後始末が1行も走らないまま
+        # 自動起動の登録が端末に残った。
+        #
+        # ランナーには Windows App SDK のランタイムが無いことがあり、
+        # そのときは 0 にならない。0xE0434352（.NET の未処理例外）だけを失敗とする。
+        # 落ちた原因が「例外を捕まえ損ねた」ことなら、必ずこの値になる
+        shell: pwsh
+        run: |
+          $exe = 'artifacts/publish/win-x64/FursuitWeather.Widget.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--uninstall-cleanup' -Wait -PassThru
+          $code = $p.ExitCode
+          Write-Output "終了コード: $code"
+          if ($code -eq -532462766) {
+            Write-Output "::error::--uninstall-cleanup が未処理の例外で落ちた（0xE0434352）。後始末が走っていない"
+            exit 1
+          }
+          if ($code -ne 0) {
+            Write-Output "::warning::--uninstall-cleanup の終了コードが $code。ランナーにランタイムが無い可能性がある"
+          }
+
       - name: 成果物として残す
         # PR では残さない。ランタイムを欠いた配れないものを、置き場所だけ占めさせない
         if: github.event_name != 'pull_request'

@@ -341,6 +341,39 @@ Inno Setupの場所は決め打ちにしません。
 リリースのときは`.github/workflows/installer.yml`が同じスクリプトを回し、できたものをGitHub Releaseへ添えます。
 組み立てに関わるファイルを触ったPRでも、ランタイムを同梱しない速い形で1回通します。
 
+#### 実機で確かめたこと
+
+2026年9月9日、`0.3.0-rc.1`で入れて消すところまで通しました。
+
+| 見たところ | 結果 |
+| ---- | ---- |
+| 昇格 | 求められません。ログに`User privileges: None`と`Administrative install mode: No`が出ます |
+| 配置先 | `%LOCALAPPDATA%\Programs\FursuitWeather`（450ファイル、222.3MB） |
+| ランタイムの連鎖インストール | 終了コード0。すでに新しい版がある端末でも通ります |
+| 通知 | 入れた先から起動して`shown=2` |
+| アンインストール | 配置先・Runキー・`StartupApproved`・ショートカット・登録がすべて消えます |
+| 利用者データ | 残ります（設計どおり） |
+
+#### 踏んだ落とし穴
+
+**`Application.StartupUri`にnullを代入できません。**
+`ArgumentNullException`が飛びます。
+小窓を出さずに後始末だけを行うつもりで書いたところ、後始末が1行も走らないまま落ちました。
+`Environment.Exit(0)`で即座に終えます。
+
+**`AppNotificationManager.UnregisterAll()`は、登録が無いと`FileNotFoundException`を投げます。**
+WinRTのHRESULTがそう写ります。
+COM例外だけを捕まえていたため、ここで落ちて自動起動の登録が端末に残りました。
+
+この2つはどちらも「アンインストールは成功したように見えるのに、端末に残る」形で現れます。
+**そのためInno側で終了コードを記録します。**
+`[UninstallRun]`は終了コードを見ないため、`CurUninstallStepChanged`から`Exec`して`Log`へ残します。
+同じ理由で、ランタイムの連鎖インストールの結果も記録します。
+
+**Innoは行頭が`[`の行をセクションの見出しとして読みます。**
+`Format`の配列引数を次の行へ送ると`Invalid section tag`になります。
+`Cardinal`と`BoolToStr`もPascal Scriptにはありません。
+
 `%LOCALAPPDATA%`は`Program Files`と違い、ACLで保護されません。
 同じ利用者の権限で動く任意のプロセスが、実行ファイルを差し替えられます。
 
