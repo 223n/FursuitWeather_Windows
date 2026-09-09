@@ -26,6 +26,8 @@ FursuitWeather_Windows/
 ├── Directory.Build.props           # package.jsonから版を読む。共通の設定を集約する
 ├── Directory.Packages.props        # 依存パッケージの版を集約する
 ├── FursuitWeather.Windows.slnx     # SDK 10 が作る新しい形式のソリューション
+├── installer/
+│   └── FursuitWeather.iss          # Inno Setup の定義。組み立ては scripts/build-installer.ps1
 ├── src/
 │   ├── FursuitWeather.Core/        # net10.0（Windowsに依存しない）
 │   │   ├── Api/                    # HttpClientによる取得、座標の丸め
@@ -319,6 +321,25 @@ Windows App SDKのランタイムは消しません。
 
 アンインストーラーは本体を非昇格で1回起動し、`UnregisterAll`を呼ばせます。
 アプリが壊れて起動できない場合に備え、レジストリを直接消す退避の経路も用意します。
+
+#### 組み立て方
+
+定義は`installer/FursuitWeather.iss`、手順は`scripts/build-installer.ps1`にあります。
+
+```powershell
+./scripts/build-installer.ps1              # 配布用
+./scripts/build-installer.ps1 -SkipRuntime # 組み立ての確認だけ。速いが配れない
+```
+
+Inno Setupの場所は決め打ちにしません。
+`windows-2025`のランナーは`Program Files (x86)`の6系に、wingetで入れると`%LOCALAPPDATA%\Programs`の7系に入るためです。
+
+**`VersionInfoVersion`は数値しか受け付けません。**
+`AppVersion`は自由書式のため`0.3.0-rc.1`をそのまま通せますが、こちらは通りません。
+プレリリースの識別子を落とした値を別に渡しています。
+
+リリースのときは`.github/workflows/installer.yml`が同じスクリプトを回し、できたものをGitHub Releaseへ添えます。
+組み立てに関わるファイルを触ったPRでも、ランタイムを同梱しない速い形で1回通します。
 
 `%LOCALAPPDATA%`は`Program Files`と違い、ACLで保護されません。
 同じ利用者の権限で動く任意のプロセスが、実行ファイルを差し替えられます。

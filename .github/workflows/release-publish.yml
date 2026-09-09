@@ -51,6 +51,8 @@ jobs:
     permissions:
       contents: write        # タグを打ち、Release を作る
       pull-requests: write   # main を develop へ戻す PR を開く
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -214,3 +216,14 @@ jobs:
           else
             echo "ブランチ ${BRANCH} はすでに無い"
           fi
+
+  installer:
+    name: インストーラーを作ってReleaseへ添える
+    # Release ができたあとに走らせる。先に走らせると添付先が無い
+    needs: publish
+    # GitHub の $/ 構文（自リポジトリ参照）は actionlint 1.7.12 がまだ理解しないため、./ のままにする
+    uses: ./.github/workflows/installer.yml # zizmor: ignore[self-repository] actionlint が $/ に未対応
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.publish.outputs.tag }}
