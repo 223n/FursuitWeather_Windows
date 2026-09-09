@@ -29,15 +29,19 @@ public static class ChangeDetector
     /// </summary>
     /// <param name="state">前回の状態。初回や読み込めなかったときは null。</param>
     /// <param name="forecast">いまの予報。</param>
-    /// <param name="alertActive">公式の熱中症警戒アラートが出ているか。</param>
+    /// <param name="alert">公式の熱中症警戒アラート。出ていなければ null。</param>
     /// <param name="locationKey">地点の識別子。座標の文字列などを渡す。</param>
     /// <param name="now">いまの時刻。</param>
     /// <param name="options">調整値。省略すると既定値を使う。</param>
     /// <returns>次に保存する状態と、出すべき通知。</returns>
+    /// <remarks>
+    /// 発表は真偽値ではなく <see cref="HeatAlert"/> のまま受ける。
+    /// 「出ているか」だけでは連日の発表を1つと見なし、2日目以降が無音になる。
+    /// </remarks>
     public static DetectionResult Evaluate(
         ChangeState? state,
         ForecastResponse forecast,
-        bool alertActive,
+        HeatAlert? alert,
         string locationKey,
         DateTimeOffset now,
         ChangeDetectorOptions? options = null)
@@ -46,6 +50,9 @@ public static class ChangeDetector
         ArgumentNullException.ThrowIfNull(locationKey);
 
         var opt = options ?? ChangeDetectorOptions.Default;
+        var alertActive = alert is not null;
+        var alertKey = alert is null ? string.Empty : AlertKeyOf(alert, now);
+        var alertSpecial = alert?.Special == true;
         var target = SelectTarget(forecast, now, opt.Lookahead);
 
         var sameLocation = state is not null &&
@@ -68,7 +75,7 @@ public static class ChangeDetector
         }
 
         // ---- 公式発表。基準の状態にも応答の新しさにも縛られない
-        if (alertActive && state?.AlertActive != true)
+        if (alert is not null && IsNewAnnouncement(state, alertKey, alertSpecial))
         {
             candidates.Add(BuildAlert(state, target, locationKey, now));
         }
@@ -78,6 +85,8 @@ public static class ChangeDetector
                 forecast,
                 target,
                 alertActive,
+                alertKey,
+                alertSpecial,
                 locationKey,
                 now,
                 state?.History,
@@ -86,7 +95,8 @@ public static class ChangeDetector
             : state!;
 
         var accepted = ApplySuppression(candidates, baseState, locationKey, now, opt);
-        var next = BuildNextState(baseState, forecast, target, alertActive, accepted, now, opt, rebasing, freshForecast);
+        var next = BuildNextState(
+            baseState, forecast, target, alertActive, alertKey, alertSpecial, accepted, now, opt, rebasing, freshForecast);
 
         return new DetectionResult(next, accepted);
     }
@@ -207,7 +217,18 @@ public static class ChangeDetector
     {
         // R1 は前回が0分のときしか通らないため、LastSuitWbgt は「0分だった時点の値」である
         var anchor = state.DiscontinuedSuitWbgt ?? state.LastSuitWbgt;
-        if (target.Outdoor.SuitWbgt > anchor - options.RecoveryDeadbandCelsius)
+
+        // 改善の向きは暑熱側と低温側で逆になる。
+        // 低温側の回復は暖まることであり、補正後WBGTは上がる。
+        // 「下がったか」だけを見ると、低温危険から着用可へ戻っても永久にR1が出ない。
+        // 前回が0分のときにしか通らないため、LastLevel は着用中止の時点のレベルである
+        var wasCold = new ActivityAssessment { Level = state.LastLevel }.LevelId.IsCold();
+        var deadband = options.RecoveryDeadbandCelsius;
+        var improved = wasCold
+            ? target.Outdoor.SuitWbgt >= anchor + deadband
+            : target.Outdoor.SuitWbgt <= anchor - deadband;
+
+        if (!improved)
         {
             return false;
         }
@@ -346,6 +367,54 @@ public static class ChangeDetector
         return accepted;
     }
 
+    /// <summary>
+    /// 取り込んでいない新しい発表かを見る。
+    /// </summary>
+    /// <param name="state">前回の状態。</param>
+    /// <param name="alertKey">今回の発表の対象日。</param>
+    /// <param name="special">今回が特別警戒か。</param>
+    /// <returns>知らせるべき新しい発表なら true。</returns>
+    /// <remarks>
+    /// <para>
+    /// 「出ているか」の真偽値だけで見てはいけない。
+    /// 熱中症警戒アラートは毎日5時に発表され、本体のAPIは0時から5時のあいだだけ
+    /// 発表なしを返す。夜間にPCを止める運用ではその時間帯を一度も取得しないため、
+    /// 前回の真がそのまま残り、2日目以降の発表が完全に無音になる。
+    /// </para>
+    /// <para>
+    /// 警戒から特別警戒への格上げも、真偽値では捉えられない。
+    /// </para>
+    /// </remarks>
+    private static bool IsNewAnnouncement(ChangeState? state, string alertKey, bool special)
+    {
+        // 前回は出ていなかった
+        if (state?.AlertActive != true)
+        {
+            return true;
+        }
+
+        // 別の日の発表になった
+        if (!string.Equals(state.AlertTargetDate, alertKey, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // 警戒から特別警戒へ上がった
+        return special && !state.AlertSpecial;
+    }
+
+    /// <summary>
+    /// 発表を見分けるための鍵。
+    /// </summary>
+    /// <remarks>
+    /// 本体が対象日を返さないときは、日本時間の日付で代える。
+    /// 空のまま扱うと、対象日を持たない発表が永久に「同じ発表」になる。
+    /// </remarks>
+    private static string AlertKeyOf(HeatAlert alert, DateTimeOffset now) =>
+        string.IsNullOrEmpty(alert.TargetDate)
+            ? JstTime.ToLocal(now).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : alert.TargetDate;
+
     /// <summary>1日の上限に数えない種類か。</summary>
     private static bool IsExemptFromDailyCap(NotificationKind kind) =>
         kind is NotificationKind.DiscontinueWear
@@ -358,6 +427,8 @@ public static class ChangeDetector
         ForecastResponse forecast,
         HourForecast? target,
         bool alertActive,
+        string alertKey,
+        bool alertSpecial,
         IReadOnlyList<PendingNotification> accepted,
         DateTimeOffset now,
         ChangeDetectorOptions options,
@@ -380,6 +451,10 @@ public static class ChangeDetector
         {
             SavedAt = now,
             AlertActive = alertActive,
+            // 発表が無いとき alertKey は空になる。
+            // ここで前回の対象日を残すと、次の発表を「同じ発表」と読み違える
+            AlertTargetDate = alertKey,
+            AlertSpecial = alertSpecial,
             History = history,
         };
 

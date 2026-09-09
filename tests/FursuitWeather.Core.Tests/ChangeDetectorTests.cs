@@ -11,6 +11,10 @@ public sealed class ChangeDetectorTests
 
     private static DateTimeOffset At(string localTime) => JstTime.ToInstant(localTime)!.Value;
 
+    /// <summary>公式の発表を作る。対象日を明示しないと、連日の発表を1つと見なす経路を踏めない。</summary>
+    private static HeatAlert Alert(string targetDate = "2026-08-15", bool special = false) =>
+        new() { PrefectureName = "東京都", TargetDate = targetDate, Special = special };
+
     /// <summary>時刻と連続活動時間とレベルから、1時間分の予報を作る。</summary>
     private static HourForecast Hour(string time, int minutes, string level = "warning", double suitWbgt = 28d) => new()
     {
@@ -55,7 +59,7 @@ public sealed class ChangeDetectorTests
         var now = At("2026-08-15T10:30");
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(null, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(null, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
         Assert.Equal(0, result.State.LastMinutes);
@@ -69,7 +73,7 @@ public sealed class ChangeDetectorTests
         var stale = Baseline(now.AddHours(-7), 20);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(stale, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(stale, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -81,7 +85,7 @@ public sealed class ChangeDetectorTests
         var other = Baseline(now.AddMinutes(-11), 20) with { LocationKey = "43.06,141.35" };
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(other, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(other, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
         Assert.Equal(Location, result.State.LocationKey);
@@ -95,7 +99,7 @@ public sealed class ChangeDetectorTests
         // generatedAt が基準以下のレスポンス
         var forecast = Forecast(state.BaselineGeneratedAt.AddMinutes(-1), Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
         Assert.Equal(state.BaselineGeneratedAt, result.State.BaselineGeneratedAt);
@@ -108,7 +112,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.DiscontinueWear, n.Kind);
@@ -124,7 +128,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 0, "danger");
         var forecast = Forecast(now, Hour("2026-01-15T06:00", 0, "coldDanger", suitWbgt: 2d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.DiscontinueWear, n.Kind);
@@ -138,7 +142,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 0, "danger");
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -150,7 +154,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.Shortened, n.Kind);
@@ -166,7 +170,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 10);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 20));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -180,7 +184,7 @@ public sealed class ChangeDetectorTests
             [new NotificationRecord(NotificationKind.Shortened, now.AddHours(-5), signature)]);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -193,7 +197,7 @@ public sealed class ChangeDetectorTests
             [new NotificationRecord(NotificationKind.Shortened, now.AddMinutes(-90), "別の署名")]);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -206,7 +210,7 @@ public sealed class ChangeDetectorTests
             [new NotificationRecord(NotificationKind.Shortened, now.AddMinutes(-121), "別の署名")]);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Single(result.Notifications);
     }
@@ -222,7 +226,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20, history: history);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.DailyCapReached, n.Kind);
@@ -241,7 +245,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20, history: history);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -258,7 +262,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20, history: history);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         // 短縮は5件しか出ていないので、6件目として通る
         var n = Assert.Single(result.Notifications);
@@ -275,7 +279,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20, history: history);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.DiscontinueWear, n.Kind);
@@ -291,7 +295,7 @@ public sealed class ChangeDetectorTests
             [new NotificationRecord(NotificationKind.DiscontinueWear, At("2026-08-15T09:00"), "朝の署名")]);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.Shortened, n.Kind);
@@ -306,7 +310,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.DiscontinueWear, n.Kind);
@@ -319,7 +323,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 0, "danger");
         var forecast = Forecast(now, Hour("2026-08-15T05:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, alert: Alert(), Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.OfficialAlert, n.Kind);
@@ -331,10 +335,12 @@ public sealed class ChangeDetectorTests
     public void アラートが続いている間は繰り返さない()
     {
         var now = At("2026-08-15T10:30");
-        var state = Baseline(now.AddMinutes(-11), 0, "danger") with { AlertActive = true };
+        var state = Baseline(now.AddMinutes(-11), 0, "danger")
+            with
+        { AlertActive = true, AlertTargetDate = "2026-08-15" };
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, alert: Alert(), Location, now);
 
         Assert.Empty(result.Notifications);
     }
@@ -349,7 +355,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 0, "danger", history: history);
         var forecast = Forecast(now, Hour("2026-08-15T20:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, alert: Alert(), Location, now);
 
         Assert.Contains(result.Notifications, n => n.Kind == NotificationKind.OfficialAlert);
     }
@@ -364,7 +370,7 @@ public sealed class ChangeDetectorTests
             Hour("2026-08-15T17:00", 10, "severe", suitWbgt: 31d),
             Hour("2026-08-15T18:00", 0, "danger", suitWbgt: 33d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.DoesNotContain(result.Notifications, n => n.Kind == NotificationKind.Recovery);
     }
@@ -379,7 +385,7 @@ public sealed class ChangeDetectorTests
             Hour("2026-08-15T17:00", 10, "severe", suitWbgt: 32.8d),
             Hour("2026-08-15T18:00", 10, "severe", suitWbgt: 32.7d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.DoesNotContain(result.Notifications, n => n.Kind == NotificationKind.Recovery);
     }
@@ -393,7 +399,7 @@ public sealed class ChangeDetectorTests
             Hour("2026-08-15T17:00", 10, "severe", suitWbgt: 31d),
             Hour("2026-08-15T18:00", 10, "severe", suitWbgt: 30d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.Recovery, n.Kind);
@@ -409,7 +415,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 0, "danger", suitWbgt: 34.5d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.Equal(34.5d, result.State.DiscontinuedSuitWbgt);
     }
@@ -506,7 +512,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 20, history: history);
         var forecast = Forecast(now, Hour("2026-08-15T10:00", 10));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now, options);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now, options);
 
         Assert.Single(result.Notifications);
         Assert.Equal(3, result.State.History.Count);
@@ -538,23 +544,23 @@ public sealed class ChangeDetectorTests
         var state = Baseline(day1.AddMinutes(-11), 0, "danger");
 
         var first = ChangeDetector.Evaluate(
-            state, Forecast(day1, Hour("2026-08-15T05:00", 0, "danger")), true, Location, day1);
+            state, Forecast(day1, Hour("2026-08-15T05:00", 0, "danger")), Alert(), Location, day1);
         Assert.Contains(first.Notifications, n => n.Kind == NotificationKind.OfficialAlert);
 
         // 解除
         var cleared = At("2026-08-15T23:00");
         var second = ChangeDetector.Evaluate(
-            first.State, Forecast(cleared, Hour("2026-08-15T23:00", 0, "danger")), false, Location, cleared);
+            first.State, Forecast(cleared, Hour("2026-08-15T23:00", 0, "danger")), null, Location, cleared);
         Assert.False(second.State.AlertActive);
 
         // 翌日の再発表。状態が古くならないよう、間に1回はさむ
         var morning = At("2026-08-16T04:00");
         var third = ChangeDetector.Evaluate(
-            second.State, Forecast(morning, Hour("2026-08-16T04:00", 0, "danger")), false, Location, morning);
+            second.State, Forecast(morning, Hour("2026-08-16T04:00", 0, "danger")), null, Location, morning);
 
         var day2 = At("2026-08-16T05:10");
         var fourth = ChangeDetector.Evaluate(
-            third.State, Forecast(day2, Hour("2026-08-16T05:00", 0, "danger")), true, Location, day2);
+            third.State, Forecast(day2, Hour("2026-08-16T05:00", 0, "danger")), Alert(), Location, day2);
 
         Assert.Contains(fourth.Notifications, n => n.Kind == NotificationKind.OfficialAlert);
     }
@@ -566,16 +572,16 @@ public sealed class ChangeDetectorTests
         var state = Baseline(morning.AddMinutes(-11), 0, "danger");
 
         var first = ChangeDetector.Evaluate(
-            state, Forecast(morning, Hour("2026-08-15T05:00", 0, "danger")), true, Location, morning);
+            state, Forecast(morning, Hour("2026-08-15T05:00", 0, "danger")), Alert(), Location, morning);
         Assert.Contains(first.Notifications, n => n.Kind == NotificationKind.OfficialAlert);
 
         var cleared = At("2026-08-15T15:00");
         var second = ChangeDetector.Evaluate(
-            first.State, Forecast(cleared, Hour("2026-08-15T15:00", 0, "danger")), false, Location, cleared);
+            first.State, Forecast(cleared, Hour("2026-08-15T15:00", 0, "danger")), null, Location, cleared);
 
         var again = At("2026-08-15T18:00");
         var third = ChangeDetector.Evaluate(
-            second.State, Forecast(again, Hour("2026-08-15T18:00", 0, "danger")), true, Location, again);
+            second.State, Forecast(again, Hour("2026-08-15T18:00", 0, "danger")), Alert(), Location, again);
 
         Assert.Contains(third.Notifications, n => n.Kind == NotificationKind.OfficialAlert);
     }
@@ -589,7 +595,7 @@ public sealed class ChangeDetectorTests
         var stale = Baseline(now.AddHours(-9), 20);
         var forecast = Forecast(now, Hour("2026-08-15T08:00", 10));
 
-        var result = ChangeDetector.Evaluate(stale, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(stale, forecast, alert: Alert(), Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.OfficialAlert, n.Kind);
@@ -602,7 +608,7 @@ public sealed class ChangeDetectorTests
         var now = At("2026-08-15T08:00");
         var forecast = Forecast(now, Hour("2026-08-15T08:00", 10));
 
-        var result = ChangeDetector.Evaluate(null, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(null, forecast, alert: Alert(), Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.OfficialAlert, n.Kind);
@@ -615,7 +621,7 @@ public sealed class ChangeDetectorTests
         var state = Baseline(now.AddMinutes(-11), 0, "danger");
         var forecast = Forecast(state.BaselineGeneratedAt, Hour("2026-08-15T05:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, alertActive: true, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, alert: Alert(), Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.OfficialAlert, n.Kind);
@@ -630,12 +636,161 @@ public sealed class ChangeDetectorTests
     {
         // 取り込まないと、次の発表で立ち上がりを検出できなくなる
         var now = At("2026-08-15T23:00");
-        var state = Baseline(now.AddMinutes(-11), 0, "danger") with { AlertActive = true };
+        var state = Baseline(now.AddMinutes(-11), 0, "danger")
+            with
+        { AlertActive = true, AlertTargetDate = "2026-08-15" };
         var forecast = Forecast(now, Hour("2026-08-15T23:00", 0, "danger"));
 
-        var result = ChangeDetector.Evaluate(state, forecast, alertActive: false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, alert: null, Location, now);
 
         Assert.False(result.State.AlertActive);
+
+        // 同じ日のうちに出し直されたら、また知らせる。
+        // 状態の値そのものではなく、次の発表が通ることで確かめる
+        var again = At("2026-08-15T23:30");
+        var second = ChangeDetector.Evaluate(
+            result.State,
+            Forecast(again, Hour("2026-08-15T23:00", 0, "danger")),
+            Alert("2026-08-15"),
+            Location,
+            again);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(second.Notifications).Kind);
+    }
+
+    [Fact]
+    public void 連日の発表は解除をはさまなくても毎日通知する()
+    {
+        // 本体のAPIは0時から5時のあいだだけ発表なしを返す。
+        // 夜間にPCを止める運用ではその時間帯を一度も取得しないため、
+        // 「出ているか」の真偽値だけで見ると2日目以降が完全に無音になる
+        var day1 = At("2026-08-15T07:00");
+        var first = ChangeDetector.Evaluate(
+            null, Forecast(day1, Hour("2026-08-15T07:00", 0, "danger")), Alert("2026-08-15"), Location, day1);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(first.Notifications).Kind);
+
+        // 解除を一度もはさまずに翌日の発表を受け取る
+        var day2 = At("2026-08-16T07:00");
+        var second = ChangeDetector.Evaluate(
+            first.State, Forecast(day2, Hour("2026-08-16T07:00", 0, "danger")), Alert("2026-08-16"), Location, day2);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(second.Notifications).Kind);
+        Assert.Equal("2026-08-16", second.State.AlertTargetDate);
+    }
+
+    [Fact]
+    public void 警戒から特別警戒への格上げを知らせる()
+    {
+        var now = At("2026-08-15T07:00");
+        var first = ChangeDetector.Evaluate(
+            null, Forecast(now, Hour("2026-08-15T07:00", 0, "danger")), Alert("2026-08-15"), Location, now);
+
+        var later = At("2026-08-15T09:00");
+        var second = ChangeDetector.Evaluate(
+            first.State,
+            Forecast(later, Hour("2026-08-15T09:00", 0, "danger")),
+            Alert("2026-08-15", special: true),
+            Location,
+            later);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(second.Notifications).Kind);
+        Assert.True(second.State.AlertSpecial);
+    }
+
+    [Fact]
+    public void 特別警戒から警戒へ下がっても繰り返さない()
+    {
+        var now = At("2026-08-15T07:00");
+        var first = ChangeDetector.Evaluate(
+            null,
+            Forecast(now, Hour("2026-08-15T07:00", 0, "danger")),
+            Alert("2026-08-15", special: true),
+            Location,
+            now);
+
+        var later = At("2026-08-15T09:00");
+        var second = ChangeDetector.Evaluate(
+            first.State,
+            Forecast(later, Hour("2026-08-15T09:00", 0, "danger")),
+            Alert("2026-08-15"),
+            Location,
+            later);
+
+        Assert.Empty(second.Notifications);
+    }
+
+    [Fact]
+    public void 対象日を持たない発表でも日付が変われば知らせる()
+    {
+        // 本体が対象日を返さないときは、日本時間の日付で代える。
+        // 空のまま扱うと、対象日を持たない発表が永久に「同じ発表」になる
+        var day1 = At("2026-08-15T07:00");
+        var first = ChangeDetector.Evaluate(
+            null, Forecast(day1, Hour("2026-08-15T07:00", 0, "danger")), Alert(string.Empty), Location, day1);
+
+        Assert.Single(first.Notifications);
+
+        var day2 = At("2026-08-16T07:00");
+        var second = ChangeDetector.Evaluate(
+            first.State, Forecast(day2, Hour("2026-08-16T07:00", 0, "danger")), Alert(string.Empty), Location, day2);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(second.Notifications).Kind);
+    }
+
+    [Fact]
+    public void 対象日を知らない古い状態からは一度だけ知らせ直す()
+    {
+        // 版を上げる前に書かれた状態には対象日が無い。
+        // 「同じ発表」と見なすと、直後の1日ぶんの発表を取りこぼす。
+        // 1回だけ重ねて出すほうを選ぶ
+        var now = At("2026-08-15T07:00");
+        var state = Baseline(now.AddMinutes(-11), 0, "danger") with { AlertActive = true };
+
+        var first = ChangeDetector.Evaluate(
+            state, Forecast(now, Hour("2026-08-15T07:00", 0, "danger")), Alert("2026-08-15"), Location, now);
+
+        Assert.Equal(NotificationKind.OfficialAlert, Assert.Single(first.Notifications).Kind);
+
+        // 2回目は繰り返さない
+        var later = At("2026-08-15T09:00");
+        var second = ChangeDetector.Evaluate(
+            first.State, Forecast(later, Hour("2026-08-15T09:00", 0, "danger")), Alert("2026-08-15"), Location, later);
+
+        Assert.Empty(second.Notifications);
+    }
+
+    [Fact]
+    public void 低温側でも回復を知らせる()
+    {
+        // 低温側の回復は暖まることであり、補正後WBGTは上がる。
+        // 「下がったか」だけを見ると、低温危険から着用可へ戻っても永久に出ない
+        var now = At("2026-01-15T10:30");
+        var state = Baseline(now.AddMinutes(-11), 0, "coldDanger", suitWbgt: 2d, discontinuedAt: 2d);
+        var forecast = Forecast(
+            now,
+            Hour("2026-01-15T10:00", 30, "coldWarning", suitWbgt: 6d),
+            Hour("2026-01-15T11:00", 30, "coldWarning", suitWbgt: 7d));
+
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
+
+        var n = Assert.Single(result.Notifications);
+        Assert.Equal(NotificationKind.Recovery, n.Kind);
+    }
+
+    [Fact]
+    public void 低温側でわずかに暖まっただけでは回復を知らせない()
+    {
+        var now = At("2026-01-15T10:30");
+        var state = Baseline(now.AddMinutes(-11), 0, "coldDanger", suitWbgt: 2d, discontinuedAt: 2d);
+        var forecast = Forecast(
+            now,
+            Hour("2026-01-15T10:00", 30, "coldWarning", suitWbgt: 2.4d),
+            Hour("2026-01-15T11:00", 30, "coldWarning", suitWbgt: 2.4d));
+
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
+
+        Assert.Empty(result.Notifications);
     }
 
     // ---- 回復の基準
@@ -647,7 +802,7 @@ public sealed class ChangeDetectorTests
         var stale = Baseline(now.AddHours(-7), 0, "danger", suitWbgt: 35d, discontinuedAt: 35d);
         var forecast = Forecast(now, Hour("2026-08-15T16:00", 10, "severe", suitWbgt: 34.9d));
 
-        var result = ChangeDetector.Evaluate(stale, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(stale, forecast, null, Location, now);
 
         Assert.Equal(35d, result.State.DiscontinuedSuitWbgt);
     }
@@ -661,7 +816,7 @@ public sealed class ChangeDetectorTests
         { LocationKey = "43.06,141.35" };
         var forecast = Forecast(now, Hour("2026-08-15T16:00", 10, "severe", suitWbgt: 34.9d));
 
-        var result = ChangeDetector.Evaluate(other, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(other, forecast, null, Location, now);
 
         Assert.Null(result.State.DiscontinuedSuitWbgt);
     }
@@ -676,7 +831,7 @@ public sealed class ChangeDetectorTests
             Hour("2026-08-15T16:00", 10, "severe", suitWbgt: 34.9d),
             Hour("2026-08-15T17:00", 10, "severe", suitWbgt: 34.8d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         Assert.DoesNotContain(result.Notifications, n => n.Kind == NotificationKind.Recovery);
     }
@@ -690,7 +845,7 @@ public sealed class ChangeDetectorTests
             Hour("2026-08-15T16:00", 10, "severe", suitWbgt: 33d),
             Hour("2026-08-15T17:00", 10, "severe", suitWbgt: 32d));
 
-        var result = ChangeDetector.Evaluate(state, forecast, false, Location, now);
+        var result = ChangeDetector.Evaluate(state, forecast, null, Location, now);
 
         var n = Assert.Single(result.Notifications);
         Assert.Equal(NotificationKind.Recovery, n.Kind);

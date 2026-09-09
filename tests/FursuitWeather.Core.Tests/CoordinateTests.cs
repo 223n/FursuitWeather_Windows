@@ -91,4 +91,27 @@ public sealed class CoordinateTests
         _ = new Coordinate(-90, -180);
         Assert.True(true);
     }
+
+    [Theory]
+    [InlineData(35.68, 139.77)]
+    [InlineData(-90d, -180d)]
+    [InlineData(90d, 180d)]
+    public void 範囲の中なら例外を出さずに作れる(double latitude, double longitude)
+    {
+        Assert.True(Coordinate.TryCreate(latitude, longitude, out var coordinate));
+        Assert.Equal(Math.Round(latitude, 2), coordinate.Latitude);
+    }
+
+    [Theory]
+    [InlineData(355.68, 139.77)]
+    [InlineData(35.68, 1399.77)]
+    [InlineData(double.NaN, 139.77)]
+    [InlineData(double.PositiveInfinity, 139.77)]
+    public void 範囲の外なら偽を返して例外を投げない(double latitude, double longitude)
+    {
+        // 端末に保存された設定は利用者が編集できる。
+        // ここで例外を投げると、起動の経路で小窓もトレイも出ないまま落ちる
+        Assert.False(Coordinate.TryCreate(latitude, longitude, out var coordinate));
+        Assert.Equal(default, coordinate);
+    }
 }

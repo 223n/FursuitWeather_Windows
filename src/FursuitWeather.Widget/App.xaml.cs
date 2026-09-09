@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using FursuitWeather.Widget.Services;
 
 namespace FursuitWeather.Widget;
@@ -37,7 +39,57 @@ public partial class App : Application
             Environment.Exit(0);
         }
 
+        // 無言で死なせない。
+        // 小窓はタスクバーに出ず、Alt+Tabにも現れないため、
+        // 落ちても利用者からは「起動しなかった」としか見えない
+        DispatcherUnhandledException += OnUnhandledException;
+
         base.OnStartup(e);
+    }
+
+    /// <summary>
+    /// 拾えなかった例外を、利用者と記録の両方へ残してから終わる。
+    /// </summary>
+    /// <param name="sender">送り主。</param>
+    /// <param name="e">起きた例外。</param>
+    /// <remarks>
+    /// <para>
+    /// 握りつぶして動き続けさせない。
+    /// 判定を出すアプリが半端な状態で動き続けるほうが危ない。
+    /// </para>
+    /// <para>
+    /// ただし黙って終わらせもしない。
+    /// 記録を <c>crash.txt</c> へ書き、画面にも出してから終える。
+    /// </para>
+    /// </remarks>
+    private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        var path = Path.Combine(WidgetSettings.Directory, "crash.txt");
+
+        Safely(() =>
+        {
+            Directory.CreateDirectory(WidgetSettings.Directory);
+            File.WriteAllText(
+                path,
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}{Environment.NewLine}{e.Exception}"));
+        });
+
+        Safely(() => MessageBox.Show(
+            "FursuitWeather が続けられない状態になりました。" + Environment.NewLine +
+            $"内容: {e.Exception.Message}" + Environment.NewLine + Environment.NewLine +
+            $"詳しい記録: {path}" + Environment.NewLine + Environment.NewLine +
+            "設定が原因のことがあります。直らないときは同じ場所の settings.json を消してみてください。",
+            "FursuitWeather",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error));
+
+        // 処理済みにしてから自分で終える。既定の異常終了の画面を重ねない
+        e.Handled = true;
+        Shutdown(1);
     }
 
     /// <summary>
