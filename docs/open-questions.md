@@ -103,6 +103,8 @@ FursuitWeatherのクライアント自体を測った値ではありません。
 
 技術選定とは別に、テンプレートから作った直後の作業が残っています。
 
-- `package.json`の`name`が`repo-template`のままです
-- `package.json`の`description`と、ルートの`README.md`がテンプレートの内容のままです
-- `scripts/setup.sh`をまだ実行していません
+- `scripts/setup.sh`をまだ実行していません。ブランチ保護、Dependabotの有効化、ラベルの同期などが未実施です
+- この端末に`.NET`のSDKが入っていません。ランタイムは10.0.12まで入っていますが、SDKが無いため`dotnet build`を実行できません
+- Visual Studioも入っていません
+
+`package.json`の`name`と`description`、ルートの`README.md`の書き換えは済みました。
