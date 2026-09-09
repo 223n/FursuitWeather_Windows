@@ -7,7 +7,15 @@
     <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- Windows App SDK は AnyCPU に対応しない。通知を足すときに要るため、いまから明示しておく -->
+    <!--
+      Windows App SDK は AnyCPU に対応しないため、通知を足すときに要る。
+
+      注意: 出力先が2系統に分かれる。
+        dotnet build <slnx>   → bin/x64/Release/...
+        dotnet build <csproj> → bin/Release/...
+      手で起動して確かめるときは、新しいほうを選ぶこと。
+      古いほうを掴んで「直したはずの挙動が出ない」と誤診した実例がある。
+    -->
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <!-- 画面の部品には公開ドキュメントを求めない -->
@@ -20,7 +28,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FursuitWeather.Core\FursuitWeather.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\tray.ico" />
   </ItemGroup>
 
 </Project>

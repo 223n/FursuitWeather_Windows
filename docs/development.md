@@ -188,6 +188,26 @@ Microsoftが配る既定の`.editorconfig`をそのまま貼らないでくだ�
 `* text=auto eol=lf`の方針自体は保ちます。
 gitがコミットのときに正規化するため、Visual StudioがCRLFで書いても実害のある衝突は起きません。
 
+### 手で起動して確かめるときの注意
+
+`Platforms`を指定しているため、**出力先が2系統に分かれます。**
+
+```text
+dotnet build <slnx>   → src/FursuitWeather.Widget/bin/x64/Release/...
+dotnet build <csproj> → src/FursuitWeather.Widget/bin/Release/...
+```
+
+古いほうを掴んで「直したはずの挙動が出ない」と誤診した実例があります。
+新しいほうを選ぶか、次のように毎回いちばん新しいものを取ってください。
+
+```powershell
+$exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeather.Widget\bin |
+       Sort-Object LastWriteTime -Descending | Select-Object -First 1
+```
+
+`--self-test-clickthrough`を付けて起動すると、クリックスルーを入れた状態で始まります。
+猶予で自動的に戻ることを、人が触らずに外から観測できます。
+
 ### 日本語Lintとの共存
 
 `package.json`の`lint`に`dotnet format`を混ぜないでください。
