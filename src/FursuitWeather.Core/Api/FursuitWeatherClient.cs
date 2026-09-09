@@ -100,6 +100,35 @@ public sealed class FursuitWeatherClient
         return await GetAsync(path, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>公式の熱中症警戒アラートの発表状況を取る。</summary>
+    /// <param name="coordinate">座標。最寄りの都道府県の判定に使われる。</param>
+    /// <param name="cancellationToken">取り消しの合図。</param>
+    /// <returns>発表の状況。発表が無ければ中身は null。</returns>
+    /// <remarks>
+    /// 上流の異常でも予報の表示を巻き込まないよう、APIは常に200で null を返す。
+    /// 取れなければ「発表なし」として扱ってよい。
+    /// </remarks>
+    public async Task<AlertResponse> GetAlertAsync(
+        Coordinate coordinate,
+        CancellationToken cancellationToken = default)
+    {
+        var path = string.Create(
+            CultureInfo.InvariantCulture,
+            $"api/alert?lat={coordinate.LatitudeText}&lon={coordinate.LongitudeText}");
+
+        using var response = await _http
+            .GetAsync(path, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        response.EnsureSuccessStatusCode();
+
+        var alert = await response.Content
+            .ReadFromJsonAsync<AlertResponse>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
+
+        return alert ?? new AlertResponse();
+    }
+
     /// <summary>デモデータを取る。気象APIへ接続できない環境の確認に使う。</summary>
     /// <param name="cancellationToken">取り消しの合図。</param>
     /// <returns>当日からの3日分の決まったデモデータ。</returns>

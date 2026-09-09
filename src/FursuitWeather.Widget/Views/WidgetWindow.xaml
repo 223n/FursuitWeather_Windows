@@ -38,6 +38,7 @@
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="小窓の表示を切り替える" Click="OnToggleVisibility" />
+                    <MenuItem Header="いま取り直す" Click="OnRefreshNow" />
                     <Separator />
                     <MenuItem x:Name="ClickThroughItem"
                               Header="クリックスルー（Ctrl+Alt+F）"
@@ -69,6 +70,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
@@ -113,8 +115,20 @@
                            Foreground="{StaticResource CardMutedText}"
                            Text="{Binding DetailText}" />
 
-                <!-- 出典の表記。常に見える位置へ描く義務がある -->
+                <!--
+                    状態の一言。古いデータであることと、公式の発表が出ていることを必ず見せる。
+                    静かに古い値を出し続けるのがいちばん危ない
+                -->
                 <TextBlock Grid.Row="4"
+                           Margin="0,0,0,2"
+                           FontSize="11"
+                           FontWeight="Bold"
+                           TextWrapping="Wrap"
+                           Foreground="{Binding AccentBrush}"
+                           Text="{Binding StatusText}" />
+
+                <!-- 出典の表記。常に見える位置へ描く義務がある -->
+                <TextBlock Grid.Row="5"
                            FontSize="10"
                            TextTrimming="CharacterEllipsis"
                            Foreground="{StaticResource CardMutedText}"
