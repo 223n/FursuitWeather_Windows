@@ -34,6 +34,15 @@ public sealed record WidgetSettings
     /// <summary>小窓の位置。まだ動かしていなければ null。</summary>
     public double? WindowTop { get; init; }
 
+    /// <summary>小窓の高さ。</summary>
+    public WindowLayer Layer { get; init; } = WindowLayer.AlwaysOnTop;
+
+    /// <summary>トースト通知を使うか。</summary>
+    public bool NotificationsEnabled { get; init; } = true;
+
+    /// <summary>Windowsへサインインしたときに自動で起動するか。</summary>
+    public bool StartWithWindows { get; init; }
+
     /// <summary>設定を置くディレクトリ。</summary>
     public static string Directory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -73,6 +82,19 @@ public sealed record WidgetSettings
             return new WidgetSettings();
         }
     }
+
+    /// <summary>
+    /// 小窓の位置だけを書き直す。
+    /// </summary>
+    /// <param name="left">左端。</param>
+    /// <param name="top">上端。</param>
+    /// <remarks>
+    /// ディスクの内容を読み直してから位置だけを差し替える。
+    /// 手元のレコードで丸ごと上書きすると、
+    /// 設定画面など別の経路で保存された変更を巻き戻してしまう。
+    /// </remarks>
+    public static void SaveWindowPosition(double left, double top) =>
+        (Load() with { WindowLeft = left, WindowTop = top }).Save();
 
     /// <summary>設定を書く。失敗しても本体は止めない。</summary>
     public void Save()

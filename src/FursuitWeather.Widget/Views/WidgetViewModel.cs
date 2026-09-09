@@ -26,6 +26,7 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
     private Brush _surfaceBrush = Brushes.WhiteSmoke;
     private Brush _textBrush = Brushes.Black;
     private Brush _accentBrush = Brushes.Gray;
+    private bool _pending = true;
 
     /// <inheritdoc />
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -66,6 +67,28 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
     /// <summary>枠線の色。</summary>
     public Brush AccentBrush { get => _accentBrush; private set => Set(ref _accentBrush, value); }
 
+    /// <summary>
+    /// 地点を切り替えたことを見せる。
+    /// </summary>
+    /// <param name="placeName">新しい地点の表示名。</param>
+    /// <remarks>
+    /// 前の地点の判定を残さない。
+    /// 取得に失敗したまま古い判定を出し続けると、別の場所の危険度を見て行動してしまう。
+    /// </remarks>
+    public void ApplyLocationPending(string placeName)
+    {
+        _pending = true;
+        HeaderText = placeName;
+        Symbol = "…";
+        LevelLabel = "取得中";
+        ActivityText = string.Empty;
+        DetailText = string.Empty;
+        StatusText = "地点を変えました。新しい地点の予報をまだ取得できていません。";
+        SurfaceBrush = Brushes.WhiteSmoke;
+        TextBrush = Brushes.Black;
+        AccentBrush = Brushes.Gray;
+    }
+
     /// <summary>取得した内容を映す。</summary>
     /// <param name="forecast">予報。</param>
     /// <param name="alert">公式の発表。無ければ null。</param>
@@ -76,6 +99,7 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(forecast);
 
         AttributionText = forecast.Attribution.WeatherData;
+        _pending = false;
 
         var hour = ForecastView.SelectCurrentHour(forecast, now);
         if (hour is null)
@@ -116,9 +140,18 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
     /// <param name="failures">続けて失敗した回数。</param>
     public void ApplyFailure(int failures)
     {
+        if (_pending)
+        {
+            // まだ一度も取れていない。古い判定は出ていないが、何も分からないことを伝える
+            StatusText = failures <= 1
+                ? "予報をまだ取得できていません。時間をおいて試します。"
+                : string.Create(CultureInfo.InvariantCulture, $"予報をまだ取得できていません（{failures}回続けて失敗）。");
+            return;
+        }
+
         StatusText = failures <= 1
-            ? "取得に失敗しました。時間をおいて試します。"
-            : string.Create(CultureInfo.InvariantCulture, $"取得に失敗しています（{failures}回続けて）。");
+            ? "取得に失敗しました。表示は前回の値です。"
+            : string.Create(CultureInfo.InvariantCulture, $"取得に失敗しています（{failures}回続けて）。表示は前回の値です。");
     }
 
     private static string BuildStatus(ForecastResponse forecast, HeatAlert? alert, DateTimeOffset now)

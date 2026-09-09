@@ -27,6 +27,8 @@ public sealed class ToastNotifier : IDisposable
 {
     private const string DisplayName = "FursuitWeather";
 
+    private Action<AppNotificationActivatedEventArgs>? _onInvoked;
+    private bool _hooked;
     private bool _registered;
     private bool _disposed;
 
@@ -71,13 +73,25 @@ public sealed class ToastNotifier : IDisposable
     /// </remarks>
     public bool Initialize(Action<AppNotificationActivatedEventArgs>? onInvoked = null)
     {
+        if (_registered)
+        {
+            return true;
+        }
+
         try
         {
             var manager = AppNotificationManager.Default;
 
             if (onInvoked is not null)
             {
-                manager.NotificationInvoked += (_, args) => onInvoked(args);
+                _onInvoked = onInvoked;
+            }
+
+            // ハンドラーは1回だけ付ける。入れ直すたびに足すと、通知1回で処理が何度も走る
+            if (!_hooked)
+            {
+                manager.NotificationInvoked += (_, args) => _onInvoked?.Invoke(args);
+                _hooked = true;
             }
 
             manager.Register(DisplayName, IconUri());
@@ -135,6 +149,32 @@ public sealed class ToastNotifier : IDisposable
         }
     }
 
+    /// <summary>
+    /// 登録を解く。
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Dispose"/> と違い、あとで <see cref="Initialize"/> し直せる。
+    /// 設定で通知を切ったときに使う。
+    /// </remarks>
+    public void Shutdown()
+    {
+        if (!_registered)
+        {
+            return;
+        }
+
+        try
+        {
+            AppNotificationManager.Default.Unregister();
+        }
+        catch (COMException)
+        {
+            // 解除に失敗しても続ける
+        }
+
+        _registered = false;
+    }
+
     /// <summary>通知のアイコンの場所。</summary>
     private static Uri IconUri()
     {
@@ -152,19 +192,7 @@ public sealed class ToastNotifier : IDisposable
 
         _disposed = true;
 
-        if (!_registered)
-        {
-            return;
-        }
-
-        try
-        {
-            // 終了時は Unregister。UnregisterAll はアンインストールのときだけ
-            AppNotificationManager.Default.Unregister();
-        }
-        catch (COMException)
-        {
-            // 解除に失敗しても終了は妨げない
-        }
+        // 終了時は Unregister。UnregisterAll はアンインストールのときだけ
+        Shutdown();
     }
 }

@@ -36,6 +36,7 @@ public partial class WidgetWindow : Window, IDisposable
     private readonly WidgetViewModel _viewModel = new();
     private ClickThroughGuard? _clickThrough;
     private ForecastService? _service;
+    private SettingsWindow? _settingsWindow;
     private readonly ToastNotifier _toast = new();
     private WidgetSettings _settings = WidgetSettings.Load();
     private bool _hotKeyRegistered;
@@ -70,9 +71,10 @@ public partial class WidgetWindow : Window, IDisposable
         _hotKeyRegistered = RegisterHotKey(handle, HotKeyId, ModControl | ModAlt | ModNoRepeat, VkF);
 
         UpdateTrayState();
+        ApplyLayer();
         // NotificationInvoked を Register より先に付ける。順序を誤ると
         // 通知の処理のために新しいプロセスが起動する
-        _toast.Initialize(_ => Dispatcher.Invoke(() => { Show(); Activate(); }));
+        ApplyNotificationSetting(initial: true);
         StartService();
         // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
         TrayIcon.ForceCreate();
@@ -122,20 +124,78 @@ public partial class WidgetWindow : Window, IDisposable
     /// <remarks>右下はトーストの出現位置と衝突するため避ける。</remarks>
     private void PositionAtTopRight()
     {
-        if (_settings.WindowLeft is { } left && _settings.WindowTop is { } top)
+        if (_settings.WindowLeft is { } left && _settings.WindowTop is { } top && IsMostlyVisible(left, top))
         {
             Left = left;
             Top = top;
             return;
         }
 
+        ResetPosition();
+    }
+
+    /// <summary>既定の位置へ戻す。主モニターの右上。</summary>
+    /// <remarks>右下はトーストの出現位置と衝突するため避ける。</remarks>
+    private void ResetPosition()
+    {
         var area = SystemParameters.WorkArea;
         Left = area.Right - Width - 16;
         Top = area.Top + 16;
     }
 
-    private void SaveWindowPosition() =>
-        (_settings with { WindowLeft = Left, WindowTop = Top }).Save();
+    /// <summary>
+    /// その位置に置いたとき、十分に画面へ入るかを見る。
+    /// </summary>
+    /// <remarks>
+    /// モニターの構成が変わると、保存した位置が画面の外になることがある。
+    /// 小窓はタスクバーにもAlt+Tabにも出ないため、
+    /// 画面の外に出ると掴む手段が無くなる。復元の前に必ず確かめる。
+    /// </remarks>
+    private bool IsMostlyVisible(double left, double top)
+    {
+        var target = new Rect(left, top, Width, Height);
+
+        foreach (var area in MonitorAreas())
+        {
+            var overlap = Rect.Intersect(target, area);
+            if (overlap.IsEmpty)
+            {
+                continue;
+            }
+
+            // 面積の半分以上が入っていれば掴める
+            if (overlap.Width * overlap.Height >= target.Width * target.Height * 0.5)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>つながっているモニターの作業領域。</summary>
+    private static IEnumerable<Rect> MonitorAreas()
+    {
+        // WPF は多モニターの情報を持たないため、仮想画面の全体と主モニターの作業領域で近似する。
+        // 主モニターより左や上にモニターがある構成では、仮想画面の側が効く
+        yield return new Rect(
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+
+        yield return SystemParameters.WorkArea;
+    }
+
+    private void SaveWindowPosition() => WidgetSettings.SaveWindowPosition(Left, Top);
+
+    private void OnResetPosition(object sender, RoutedEventArgs e)
+    {
+        ResetPosition();
+        SaveWindowPosition();
+        _settings = WidgetSettings.Load();
+        ApplyLayer(ShowRequest.User);
+    }
 
     /// <summary>取得を始める。</summary>
     private void StartService()
@@ -152,6 +212,172 @@ public partial class WidgetWindow : Window, IDisposable
     }
 
     private void OnRefreshNow(object sender, RoutedEventArgs e) => _service?.RefreshNow();
+
+    private void OnOpenSettings(object sender, RoutedEventArgs e)
+    {
+        // 二重に開かせない。あとから保存したほうが、先に開いた画面の古い値で巻き戻る
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        var state = _settings.NotificationsEnabled
+            ? _toast.DescribeSetting()
+            : "この設定で切っています";
+
+        _settingsWindow = new SettingsWindow(_settings, state)
+        {
+            Owner = IsVisible ? this : null,
+        };
+
+        var dialog = _settingsWindow;
+        bool? answer;
+        try
+        {
+            answer = dialog.ShowDialog();
+        }
+        finally
+        {
+            _settingsWindow = null;
+        }
+
+        if (answer != true || dialog.Result is not { } updated)
+        {
+            return;
+        }
+        var locationChanged =
+            Math.Abs(updated.Latitude - _settings.Latitude) > double.Epsilon ||
+            Math.Abs(updated.Longitude - _settings.Longitude) > double.Epsilon;
+
+        _settings = updated;
+        ApplyLayer();
+        ApplyNotificationSetting(initial: false);
+
+        if (locationChanged)
+        {
+            // 前の地点の判定を残さない。取得できるまで「取得中」を見せる
+            _viewModel.ApplyLocationPending(_settings.PlaceName);
+            _service?.ChangeLocation(new Coordinate(_settings.Latitude, _settings.Longitude));
+        }
+        else
+        {
+            // 表示名だけ変わった場合に、次の取得を待たずに反映する
+            _service?.RefreshNow();
+        }
+    }
+
+    /// <summary>設定に合わせて通知の登録を入れ直す。</summary>
+    /// <param name="initial">起動時の呼び出しなら true。</param>
+    /// <remarks>
+    /// 起動時に1回だけ登録すると、設定で切って入れ直しても再起動まで効かない。
+    /// 設定を保存するたびに当て直す。
+    /// </remarks>
+    private void ApplyNotificationSetting(bool initial)
+    {
+        if (_settings.NotificationsEnabled)
+        {
+            var ok = _toast.Initialize(_ => Dispatcher.Invoke(() => ApplyLayer(ShowRequest.Notification)));
+
+            if (!ok && !initial)
+            {
+                // 黙って壊れない。設定したのに効かないことを利用者へ返す
+                ShowDialog(
+                    "通知を有効にできませんでした。" + Environment.NewLine +
+                    "Windows App SDK のランタイムが入っていない可能性があります。",
+                    MessageBoxImage.Warning);
+            }
+        }
+        else
+        {
+            _toast.Shutdown();
+        }
+
+        UpdateTrayState();
+    }
+
+    /// <summary>
+    /// 小窓を親にしてよいかを見たうえで、案内を出す。
+    /// </summary>
+    /// <remarks>
+    /// 隠れている小窓を親にすると、案内が背面へ回って触れなくなる。
+    /// 見えていないときは親を付けず、最前面で出す。
+    /// </remarks>
+    private void ShowDialog(string text, MessageBoxImage icon)
+    {
+        if (IsVisible)
+        {
+            MessageBox.Show(this, text, "FursuitWeather", MessageBoxButton.OK, icon);
+            return;
+        }
+
+        var host = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Width = 1,
+            Height = 1,
+            Left = -32000,
+            Top = -32000,
+            Topmost = true,
+            ShowActivated = false,
+        };
+
+        host.Show();
+        try
+        {
+            MessageBox.Show(host, text, "FursuitWeather", MessageBoxButton.OK, icon);
+        }
+        finally
+        {
+            host.Close();
+        }
+    }
+
+    /// <summary>表示を求めてきた経路。</summary>
+    private enum ShowRequest
+    {
+        /// <summary>設定を当てるだけ。表示は求めない。</summary>
+        None,
+
+        /// <summary>利用者が明示的に求めた。</summary>
+        User,
+
+        /// <summary>通知が押された。</summary>
+        Notification,
+    }
+
+    /// <summary>
+    /// 設定に合わせて小窓の高さと表示を整える。
+    /// </summary>
+    /// <param name="request">表示を求めてきた経路。</param>
+    /// <remarks>
+    /// 表示する経路をここ1本に集約する。
+    /// 通知のクリックが設定を飛び越えて最前面へ出すようなことを防ぐ。
+    /// </remarks>
+    private void ApplyLayer(ShowRequest request = ShowRequest.None)
+    {
+        // Topmost は必ず設定から導く。分岐によって前の値が残らないようにする
+        Topmost = _settings.Layer == WindowLayer.AlwaysOnTop;
+
+        if (_settings.Layer == WindowLayer.TrayOnly)
+        {
+            // 「トレイだけ」を選んでいるなら、通知から押されても小窓は出さない。
+            // 利用者が明示的に求めたときだけ出す
+            if (request == ShowRequest.User)
+            {
+                Show();
+            }
+            else
+            {
+                Hide();
+            }
+
+            return;
+        }
+
+        Show();
+    }
 
     /// <summary>自己テストの結果をファイルへ書く。</summary>
     private void RunNotificationSelfTest()
@@ -189,14 +415,20 @@ public partial class WidgetWindow : Window, IDisposable
     /// </remarks>
     private void OnTestNotification(object sender, RoutedEventArgs e)
     {
+        if (!_settings.NotificationsEnabled)
+        {
+            ShowDialog(
+                "この設定で通知を切っています。" + Environment.NewLine +
+                "設定で「トースト通知を使う」にチェックを入れてから試してください。",
+                MessageBoxImage.Information);
+            return;
+        }
+
         if (!_toast.IsRegistered)
         {
-            MessageBox.Show(
-                this,
+            ShowDialog(
                 "通知を登録できていません。" + Environment.NewLine +
                 "Windows App SDK のランタイムが入っていない可能性があります。",
-                "FursuitWeather",
-                MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
@@ -208,11 +440,8 @@ public partial class WidgetWindow : Window, IDisposable
 
         if (!shown)
         {
-            MessageBox.Show(
-                this,
+            ShowDialog(
                 $"通知を出せませんでした。{Environment.NewLine}設定: {_toast.DescribeSetting()}",
-                "FursuitWeather",
-                MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
     }
@@ -229,10 +458,17 @@ public partial class WidgetWindow : Window, IDisposable
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
+        if (e.ButtonState != MouseButtonState.Pressed)
         {
-            DragMove();
+            return;
         }
+
+        // DragMove はドラッグが終わるまで戻らない
+        DragMove();
+
+        // 動かし終えたところで保存する。
+        // 終了時だけに頼ると、強制終了やクラッシュで位置を失う
+        SaveWindowPosition();
     }
 
     private void OnToggleClickThrough(object sender, RoutedEventArgs e) => _clickThrough?.Toggle();
@@ -281,14 +517,16 @@ public partial class WidgetWindow : Window, IDisposable
             .AppendLine(CultureInfo.InvariantCulture,
                 $"ホットキー(Ctrl+Alt+F): {(_hotKeyRegistered ? "登録できている" : "登録できていない")}")
             .AppendLine(CultureInfo.InvariantCulture,
-                $"通知の登録: {(_toast.IsRegistered ? "できている" : "できていない")} / 設定: {_toast.DescribeSetting()}")
+                $"通知: 設定で{(_settings.NotificationsEnabled ? "入" : "切")} / 登録{(_toast.IsRegistered ? "済" : "なし")} / {_toast.DescribeSetting()}")
+            .AppendLine(CultureInfo.InvariantCulture, $"自動起動: {StartupRegistration.GetState()}")
+            .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
             .AppendLine()
             .AppendLine("Per-Monitor V2 が効いているかは、タスクマネージャーの")
             .AppendLine("「詳細」タブで「DPI 認識」の列を出して確かめてください。")
             .Append("「システム拡張」ではなく「モニターごと (V2)」と出れば正しい状態です。")
             .ToString();
 
-        MessageBox.Show(this, text, "検証に使う情報", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowDialog(text, MessageBoxImage.Information);
     }
 
     private void OnExit(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
