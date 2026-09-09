@@ -1,0 +1,106 @@
+<Window x:Class="FursuitWeather.Widget.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FursuitWeather の設定"
+        Width="440"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True">
+
+    <!--
+        いま実際に効く項目だけを置く。
+        動かない飾りのコントロールを置かない。
+    -->
+    <StackPanel Margin="20">
+
+        <TextBlock Text="地点" FontWeight="Bold" />
+        <TextBlock Margin="0,4,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#4A4A4A"
+                   Text="座標は小数2桁（およそ1km四方）へ丸めてから送ります。本体の公開している約束に合わせるためです。" />
+
+        <Grid Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="緯度" VerticalAlignment="Center" />
+            <TextBox x:Name="LatitudeBox" Grid.Column="1" Margin="8,0,16,0" />
+            <TextBlock Text="経度" Grid.Column="2" VerticalAlignment="Center" />
+            <TextBox x:Name="LongitudeBox" Grid.Column="3" Margin="8,0,0,0" />
+        </Grid>
+
+        <Grid Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="表示名" VerticalAlignment="Center" />
+            <TextBox x:Name="PlaceBox" Grid.Column="1" Margin="8,0,0,0" />
+        </Grid>
+
+        <TextBlock x:Name="ErrorText"
+                   Margin="0,8,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#99260C"
+                   Visibility="Collapsed" />
+
+        <Separator Margin="0,16,0,12" />
+
+        <TextBlock Text="小窓の高さ" FontWeight="Bold" />
+        <RadioButton x:Name="LayerTopRadio" Margin="0,8,0,0" GroupName="Layer">
+            <StackPanel>
+                <TextBlock Text="常に手前" />
+                <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
+                           Text="いつでも見えます。配信や画面の共有には映り込みます。" />
+            </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="LayerNormalRadio" Margin="0,8,0,0" GroupName="Layer">
+            <StackPanel>
+                <TextBlock Text="ほかの窓に隠れてよい" />
+                <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
+                           Text="作業の邪魔になりません。隠れているあいだは判定が目に入りません。" />
+            </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="LayerTrayRadio" Margin="0,8,0,0" GroupName="Layer">
+            <StackPanel>
+                <TextBlock Text="トレイだけ" />
+                <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
+                           Text="小窓を出しません。通知と、トレイのアイコンの上に出る文字だけで伝えます。" />
+            </StackPanel>
+        </RadioButton>
+
+        <Separator Margin="0,16,0,12" />
+
+        <TextBlock Text="通知と起動" FontWeight="Bold" />
+        <CheckBox x:Name="NotificationsCheck" Margin="0,8,0,0" Content="トースト通知を使う" />
+        <TextBlock x:Name="NotificationStateText"
+                   Margin="24,2,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#4A4A4A" />
+        <CheckBox x:Name="StartupCheck" Margin="0,10,0,0" Content="Windowsへサインインしたときに起動する" />
+        <TextBlock x:Name="StartupStateText"
+                   Margin="24,2,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#7A3100"
+                   Visibility="Collapsed" />
+        <TextBlock Margin="24,2,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#4A4A4A"
+                   Text="「設定」の「アプリ」の「スタートアップ」やタスクマネージャーからも切り替えられます。" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button x:Name="CancelButton" Content="やめる" Width="90" Height="30" Click="OnCancel" />
+            <Button x:Name="SaveButton" Content="保存する" Width="90" Height="30" Margin="10,0,0,0"
+                    IsDefault="True" Click="OnSave" />
+        </StackPanel>
+    </StackPanel>
+</Window>
