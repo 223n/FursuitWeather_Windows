@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using FursuitWeather.Widget.Interop;
+using H.NotifyIcon;
 
 namespace FursuitWeather.Widget.Views;
 
@@ -30,7 +31,8 @@ public partial class WidgetWindow : Window
     private const uint VkF = 0x46;
     private const int WmHotKey = 0x0312;
 
-    private bool _clickThrough;
+    private ClickThroughGuard? _clickThrough;
+    private bool _hotKeyRegistered;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
@@ -52,31 +54,45 @@ public partial class WidgetWindow : Window
         WindowChrome.ApplyOverlayStyles(this);
         PositionAtTopRight();
 
-        var handle = new WindowInteropHelper(this).Handle;
-        var source = HwndSource.FromHwnd(handle);
-        source?.AddHook(OnWindowMessage);
+        _clickThrough = new ClickThroughGuard(this);
+        _clickThrough.Changed += (_, _) => UpdateTrayState();
 
-        // クリックスルーを解除するための帯域外の経路。
-        // 有効にした窓は一切のマウス入力を受け付けないため、これが無いと操作できなくなる
-        if (!RegisterHotKey(handle, HotKeyId, ModControl | ModAlt | ModNoRepeat, VkF))
+        var handle = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(handle)?.AddHook(OnWindowMessage);
+
+        // 解除の経路その2。効かなくてもトレイと自動の復帰が残る
+        _hotKeyRegistered = RegisterHotKey(handle, HotKeyId, ModControl | ModAlt | ModNoRepeat, VkF);
+
+        UpdateTrayState();
+        // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
+        TrayIcon.ForceCreate();
+
+        // 自動で戻る仕組みが本当に効くかを機械で確かめるためのスイッチ。
+        // 起動と同時にクリックスルーを入れる。人が触らなくても猶予で戻ることを外から観測できる
+        // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
+        // 起動と同時にクリックスルーを入れる
+        if (Environment.GetCommandLineArgs().Contains("--self-test-clickthrough", StringComparer.Ordinal))
         {
-            MessageBox.Show(
-                this,
-                "ホットキー（Ctrl+Alt+F）を登録できませんでした。\n" +
-                "クリックスルーを有効にすると、解除できなくなる恐れがあります。",
-                "FursuitWeather",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            _clickThrough.Enable();
         }
 
-        Closed += (_, _) => UnregisterHotKey(handle, HotKeyId);
+        Closed += (_, _) =>
+        {
+            if (_hotKeyRegistered)
+            {
+                UnregisterHotKey(handle, HotKeyId);
+            }
+
+            _clickThrough?.Stop();
+            TrayIcon.Dispose();
+        };
     }
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == WmHotKey && wParam.ToInt32() == HotKeyId)
         {
-            ToggleClickThrough();
+            _clickThrough?.Toggle();
             handled = true;
         }
 
@@ -91,6 +107,16 @@ public partial class WidgetWindow : Window
         Top = area.Top + 16;
     }
 
+    /// <summary>トレイの表示を、いまの状態に合わせる。</summary>
+    private void UpdateTrayState()
+    {
+        var state = _clickThrough?.Describe() ?? "クリックスルー: 切";
+        TrayIcon.ToolTipText = $"FursuitWeather\n{state}";
+        ClickThroughItem.IsChecked = _clickThrough?.IsEnabled ?? false;
+        PinItem.IsEnabled = _clickThrough?.IsEnabled ?? false;
+        PinItem.IsChecked = _clickThrough?.IsPinned ?? false;
+    }
+
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed)
@@ -99,23 +125,34 @@ public partial class WidgetWindow : Window
         }
     }
 
-    private void OnToggleClickThrough(object sender, RoutedEventArgs e) => ToggleClickThrough();
+    private void OnToggleClickThrough(object sender, RoutedEventArgs e) => _clickThrough?.Toggle();
 
-    private void ToggleClickThrough()
+    private void OnPinClickThrough(object sender, RoutedEventArgs e)
     {
-        _clickThrough = !_clickThrough;
-        WindowChrome.SetClickThrough(this, _clickThrough);
-
-        if (_clickThrough)
+        if (_clickThrough is null)
         {
-            MessageBox.Show(
-                this,
-                "クリックスルーを有効にしました。\n" +
-                "この状態では小窓はマウス入力を受け付けません。\n" +
-                "Ctrl+Alt+F で解除できます。",
-                "FursuitWeather",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            return;
+        }
+
+        if (_clickThrough.IsPinned)
+        {
+            _clickThrough.Disable();
+        }
+        else
+        {
+            _clickThrough.Pin();
+        }
+    }
+
+    private void OnToggleVisibility(object sender, RoutedEventArgs e)
+    {
+        if (IsVisible)
+        {
+            Hide();
+        }
+        else
+        {
+            Show();
         }
     }
 
@@ -130,7 +167,9 @@ public partial class WidgetWindow : Window
             .AppendLine(CultureInfo.InvariantCulture, $"ウィンドウの位置: Left={Left:0} / Top={Top:0}")
             .AppendLine(CultureInfo.InvariantCulture, $"作業領域: {SystemParameters.WorkArea}")
             .AppendLine(CultureInfo.InvariantCulture, $"ウィンドウハンドル: 0x{handle.ToInt64():X}")
-            .AppendLine(CultureInfo.InvariantCulture, $"クリックスルー: {(_clickThrough ? "有効" : "無効")}")
+            .AppendLine(CultureInfo.InvariantCulture, $"{_clickThrough?.Describe()}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"ホットキー(Ctrl+Alt+F): {(_hotKeyRegistered ? "登録できている" : "登録できていない")}")
             .AppendLine()
             .AppendLine("Per-Monitor V2 が効いているかは、タスクマネージャーの")
             .AppendLine("「詳細」タブで「DPI 認識」の列を出して確かめてください。")
