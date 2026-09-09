@@ -1,4 +1,3 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
 テンプレートから作ったリポジトリの初期設定をまとめて行う。
@@ -36,6 +35,7 @@ README の「作った直後にやること」のうち、gh CLI で行えるも
 ./scripts/setup.ps1 -DryRun
 何をするかを表示するだけ。
 #>
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [ValidatePattern('^[^/\s]+/[^/\s]+$')]
