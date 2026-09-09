@@ -180,6 +180,11 @@ Write-Host "ISCC: $iscc"
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
+# できあがりの名前はここが決める。
+# .iss の側で組み立てると、探す側と食い違ったときに黙って見失う。
+# 実際に -noruntime を足したとき、*-setup.exe のフィルタから外れて落ちた
+$baseName = "FursuitWeather-$version-x64-setup"
+
 $isccArgs = @(
     $issFile,
     "/DAppVersion=$version",
@@ -193,9 +198,10 @@ if ($RuntimeInstaller) {
 else {
     # 名前で見分けられるようにする。
     # 同じ名前だと、配れないものが Release へ上がったときに気付けない
-    $isccArgs += "/DOutputSuffix=-noruntime"
+    $baseName += '-noruntime'
     Write-Warning 'ランタイムを同梱していません。このインストーラーは配布に使えません。'
 }
+$isccArgs += "/DOutputBaseFilename=$baseName"
 
 Write-Host '組み立てています...'
 & $iscc @isccArgs
@@ -203,13 +209,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "ISCC が失敗しました（終了コード $LASTEXITCODE）。"
 }
 
-$setup = Get-ChildItem -Path $OutputDir -Filter '*-setup.exe' |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-
-if (-not $setup) {
-    throw "できあがったインストーラーが $OutputDir に見つかりません。"
+# 名前で決め打ちに取る。
+# 更新時刻の新しいものを拾う書き方だと、今回の組み立てが失敗したときに
+# 前回の残骸を掴んで成功したように見える
+$setupPath = Join-Path $OutputDir "$baseName.exe"
+if (-not (Test-Path $setupPath)) {
+    throw "できあがったインストーラーが見つかりません: $setupPath"
 }
+$setup = Get-Item $setupPath
 
 $setupMb = [math]::Round($setup.Length / 1MB, 1)
 Write-Host ''

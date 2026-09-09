@@ -22,8 +22,8 @@
 #ifndef OutputDir
   #define OutputDir "dist"
 #endif
-#ifndef OutputSuffix
-  #define OutputSuffix ""
+#ifndef OutputBaseFilename
+  #define OutputBaseFilename "FursuitWeather-setup"
 #endif
 
 #define AppName "FursuitWeather"
@@ -63,7 +63,9 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 OutputDir={#OutputDir}
-OutputBaseFilename={#AppName}-{#AppVersion}-x64-setup{#OutputSuffix}
+; 名前は scripts/build-installer.ps1 が決めて渡す。
+; ここで組み立てると、できあがりを探す側と食い違ったときに黙って見失う
+OutputBaseFilename={#OutputBaseFilename}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
