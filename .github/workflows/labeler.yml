@@ -1,13 +1,16 @@
 name: PRにラベルを付ける
 
 # PR が変えたファイルとブランチ名から、.github/labeler.yml に従ってラベルを付ける。
+# あわせて、表題の接頭辞（[Add] など）から種類のラベルを付ける。
 #
 # pull_request_target を使うのは、フォークからの PR でもラベルを書ける権限を得るためである。
 # このイベントは base ブランチの内容で動くため、PR 側の設定変更は効かない。
 # また PR のコードを checkout して実行してはならない（ここでは checkout しない）。
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    # edited を入れるのは、表題を直したときにラベルを付け直すためである。
+    # ファイルを見るジョブにとっては空振りだが、評価し直すだけで害はない
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -30,3 +33,41 @@ jobs:
           configuration-path: .github/labeler.yml
           # 条件に合わなくなったラベルを外すか。人が付けたラベルまで外れることがあるため切ってある
           sync-labels: false
+
+  label-by-title:
+    name: 表題からラベルを付ける
+    # ファイルのパスだけを見ると、docs/ や *.md を触った PR がすべて「ドキュメント」になる。
+    # 実際そうなり、リリースノートの15本すべてが「文書」に入った。
+    # 「機能追加」と「バグ」は Issue フォーム用で、PR には付かないためである。
+    #
+    # 表題の接頭辞は CONTRIBUTING.md で必須にしてあるため、そこから引く。
+    # GitHub のリリースノートは .github/release.yml の上から順に最初に当たった分類へ入れるので、
+    # 「ドキュメント」が残っていても、種類のラベルのほうが先に当たる。
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # 表題は PR を出した人が自由に書ける。run: の中へ直接埋め込まず、必ず env を経由する
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: 接頭辞に対応するラベルを付ける
+        run: |
+          # case のパターンで [Add] を引用符で囲む。囲まないと [Ad] が文字集合として扱われ、
+          # 「A か d で始まる表題」に当たってしまう
+          case "${PR_TITLE}" in
+            "[Add]"*) label='機能追加' ;;
+            "[Fix]"*) label='バグ' ;;
+            "[Doc]"*) label='ドキュメント' ;;
+            *)
+              # [Mod] と [Del] に当たるラベルは置かない。
+              # .github/release.yml の '*' が拾い、「その他の変更」に入る
+              echo "種類のラベルを付けない接頭辞である"
+              exit 0
+              ;;
+          esac
+
+          gh pr edit "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --add-label "${label}" \
+            || echo "::warning::ラベル「${label}」を付けられなかった。.github/labels.yml の同期が済んでいるか確かめる"

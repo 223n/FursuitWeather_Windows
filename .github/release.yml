@@ -1,6 +1,15 @@
 # GitHub Release の本文を自動で作るときの分類。ラベルで振り分ける。
 # 「リリースを公開する」ワークフローが gh release create --generate-notes で使う。
 # 参考: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# PR は上から順に、最初に当たった分類へ入る。1つの PR が2つの分類に載ることはない。
+# そのため、種類のラベル（機能追加・バグ）を、パスから付く「ドキュメント」より上に置いてある。
+#
+# 種類のラベルは PR の表題の接頭辞から付く。対応は .github/workflows/labeler.yml にある。
+#
+#   [Add] → 機能追加 / [Fix] → バグ / [Doc] → ドキュメント / [Mod] と [Del] → その他の変更
+#
+# 破壊的変更とセキュリティは自動で付かない。PR を確認した人が付ける。
 changelog:
   exclude:
     labels:
