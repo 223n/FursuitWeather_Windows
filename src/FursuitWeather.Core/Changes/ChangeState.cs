@@ -50,6 +50,19 @@ public sealed record ChangeState
     /// <summary>公式のアラートが出ている状態か。</summary>
     public bool AlertActive { get; init; }
 
+    /// <summary>
+    /// 取り込んだ発表の対象日。
+    /// </summary>
+    /// <remarks>
+    /// 出ているかどうかの真偽値だけでは、連日の発表を1つと見なしてしまう。
+    /// 熱中症警戒アラートは毎日5時に発表され、日付が変わるたびに別の発表である。
+    /// 古い保存内容から読んだときは空になる。
+    /// </remarks>
+    public string AlertTargetDate { get; init; } = string.Empty;
+
+    /// <summary>取り込んだ発表が特別警戒だったか。警戒からの格上げを見るために持つ。</summary>
+    public bool AlertSpecial { get; init; }
+
     /// <summary>出した通知の履歴。</summary>
     public IReadOnlyList<NotificationRecord> History { get; init; } = [];
 
@@ -57,6 +70,8 @@ public sealed record ChangeState
     /// <param name="forecast">予報。</param>
     /// <param name="hour">基準にする時間。</param>
     /// <param name="alertActive">公式のアラートが出ているか。</param>
+    /// <param name="alertTargetDate">発表の対象日。無ければ空。</param>
+    /// <param name="alertSpecial">特別警戒か。</param>
     /// <param name="locationKey">地点の識別子。</param>
     /// <param name="now">いまの時刻。</param>
     /// <param name="history">引き継ぐ履歴。</param>
@@ -69,6 +84,8 @@ public sealed record ChangeState
         ForecastResponse forecast,
         HourForecast? hour,
         bool alertActive,
+        string alertTargetDate,
+        bool alertSpecial,
         string locationKey,
         DateTimeOffset now,
         IReadOnlyList<NotificationRecord>? history = null,
@@ -87,6 +104,8 @@ public sealed record ChangeState
             LastSuitWbgt = hour?.Outdoor.SuitWbgt ?? 0d,
             DiscontinuedSuitWbgt = discontinuedSuitWbgt,
             AlertActive = alertActive,
+            AlertTargetDate = alertTargetDate,
+            AlertSpecial = alertSpecial,
             History = history ?? [],
         };
     }

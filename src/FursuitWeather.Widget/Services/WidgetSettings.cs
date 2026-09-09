@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FursuitWeather.Core.Api;
 
 namespace FursuitWeather.Widget.Services;
 
@@ -75,12 +76,46 @@ public sealed record WidgetSettings
             }
 
             var json = File.ReadAllText(FilePath);
-            return JsonSerializer.Deserialize<WidgetSettings>(json, Options) ?? new WidgetSettings();
+            var loaded = JsonSerializer.Deserialize<WidgetSettings>(json, Options) ?? new WidgetSettings();
+            return Sanitize(loaded);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
             return new WidgetSettings();
         }
+    }
+
+    /// <summary>
+    /// 使える値かを確かめ、駄目なら既定へ落とす。
+    /// </summary>
+    /// <param name="settings">読んだ設定。</param>
+    /// <returns>そのまま使える設定。</returns>
+    /// <remarks>
+    /// <para>
+    /// JSONとして読めることと、値として使えることは別である。
+    /// 範囲の外の座標はここを素通りし、<see cref="Coordinate"/> を作る時点で例外になる。
+    /// それが起動の経路で起きると、小窓もトレイも出ないまま落ちる。
+    /// 設定は起動のたびに読むため、以後この端末では毎回落ち続ける。
+    /// </para>
+    /// <para>
+    /// 座標を既定へ戻すときは表示名も戻す。
+    /// 「札幌」と出したまま東京の判定を見せるほうが危ない。
+    /// </para>
+    /// </remarks>
+    private static WidgetSettings Sanitize(WidgetSettings settings)
+    {
+        if (Coordinate.TryCreate(settings.Latitude, settings.Longitude, out _))
+        {
+            return settings;
+        }
+
+        var fallback = new WidgetSettings();
+        return settings with
+        {
+            Latitude = fallback.Latitude,
+            Longitude = fallback.Longitude,
+            PlaceName = fallback.PlaceName,
+        };
     }
 
     /// <summary>
@@ -96,13 +131,30 @@ public sealed record WidgetSettings
     public static void SaveWindowPosition(double left, double top) =>
         (Load() with { WindowLeft = left, WindowTop = top }).Save();
 
-    /// <summary>設定を書く。失敗しても本体は止めない。</summary>
+    /// <summary>
+    /// 設定を書く。失敗しても本体は止めない。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// いったん別名で書いてから置き換える。
+    /// <c>WriteAllText</c> は先に中身を切り詰めるため、
+    /// 電源断や強制終了と重なると途中で切れたJSONが残る。
+    /// 次の起動でそれを読むと設定が丸ごと既定へ戻り、
+    /// 札幌にいる利用者へ東京の判定を出すことになる。
+    /// </para>
+    /// <para>
+    /// 小窓を動かすたびに書き直すため、切断の窓に当たる機会は少なくない。
+    /// </para>
+    /// </remarks>
     public void Save()
     {
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, Options));
+
+            var temporary = FilePath + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(this, Options));
+            File.Move(temporary, FilePath, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -86,10 +86,11 @@ public static class NotificationPlanner
             lastBriefingDate = briefing.Date;
         }
 
+        // 発表はそのまま渡す。真偽値へ潰すと、対象日と特別警戒の区別が検知側へ届かない
         var detection = ChangeDetector.Evaluate(
             previous.Change,
             forecast,
-            alert is not null,
+            alert,
             locationKey,
             now,
             changeOptions);
