@@ -98,7 +98,19 @@ jobs:
         shell: pwsh
         run: |
           $exe = 'artifacts/publish/win-x64/FursuitWeather.Widget.exe'
-          $p = Start-Process -FilePath $exe -ArgumentList '--uninstall-cleanup' -Wait -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList '--uninstall-cleanup' -PassThru
+
+          # 待ち時間を必ず区切る。
+          # ランタイムが無いとブートストラッパーが案内の画面を出すことがあり、
+          # 画面の無い環境では閉じられずに戻ってこない。
+          # 実際にこのステップが45分の上限まで止まった
+          if (-not $p.WaitForExit(60000)) {
+            $p.Kill()
+            Write-Output "::error::--uninstall-cleanup が60秒で終わらなかった。アンインストールが止まる形の欠陥である"
+            exit 1
+          }
+
+          $p.WaitForExit()
           $code = $p.ExitCode
           Write-Output "終了コード: $code"
           if ($code -eq -532462766) {

@@ -199,6 +199,11 @@ begin
   if CurUninstallStep <> usUninstall then
     Exit;
 
+  { 自動起動を先に消す。本体の起動に頼らない。
+    ランタイムが無い端末では本体が Main へ到達せずに終わるため、
+    あとに回すと消し残す }
+  RemoveStartupEntries();
+
   { 本体を1回起動して通知の登録を消させる。
     これは best-effort である。起動できなくても後始末は続ける }
   Exe := ExpandConstant('{app}\{#AppExeName}');
@@ -210,9 +215,6 @@ begin
     Log('後始末: 本体による後始末が済んだ')
   else
     Log(Format('後始末: 本体が終了コード %d で失敗した。通知の登録が残っている可能性がある', [ResultCode]));
-
-  { 自動起動だけは本体に頼らない。ここが最後の砦になる }
-  RemoveStartupEntries();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
