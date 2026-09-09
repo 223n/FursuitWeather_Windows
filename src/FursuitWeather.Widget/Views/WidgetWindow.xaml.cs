@@ -5,7 +5,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using FursuitWeather.Core.Api;
 using FursuitWeather.Widget.Interop;
+using FursuitWeather.Widget.Services;
 using H.NotifyIcon;
 
 namespace FursuitWeather.Widget.Views;
@@ -22,7 +24,7 @@ namespace FursuitWeather.Widget.Views;
 /// <item><c>app.manifest</c> の Per-Monitor V2 が効いているか</item>
 /// </list>
 /// </remarks>
-public partial class WidgetWindow : Window
+public partial class WidgetWindow : Window, IDisposable
 {
     private const int HotKeyId = 0xF001;
     private const uint ModControl = 0x0002;
@@ -31,14 +33,17 @@ public partial class WidgetWindow : Window
     private const uint VkF = 0x46;
     private const int WmHotKey = 0x0312;
 
+    private readonly WidgetViewModel _viewModel = new();
     private ClickThroughGuard? _clickThrough;
+    private ForecastService? _service;
+    private WidgetSettings _settings = WidgetSettings.Load();
     private bool _hotKeyRegistered;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
     {
         InitializeComponent();
-        DataContext = WidgetViewModel.CreateSample();
+        DataContext = _viewModel;
     }
 
     [LibraryImport("user32.dll", SetLastError = true)]
@@ -64,6 +69,7 @@ public partial class WidgetWindow : Window
         _hotKeyRegistered = RegisterHotKey(handle, HotKeyId, ModControl | ModAlt | ModNoRepeat, VkF);
 
         UpdateTrayState();
+        StartService();
         // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
         TrayIcon.ForceCreate();
 
@@ -83,8 +89,8 @@ public partial class WidgetWindow : Window
                 UnregisterHotKey(handle, HotKeyId);
             }
 
-            _clickThrough?.Stop();
-            TrayIcon.Dispose();
+            SaveWindowPosition();
+            Dispose();
         };
     }
 
@@ -99,13 +105,40 @@ public partial class WidgetWindow : Window
         return IntPtr.Zero;
     }
 
-    /// <summary>既定の位置は主モニターの右上。右下はトーストの出現位置と衝突する。</summary>
+    /// <summary>前に置いた位置へ戻す。無ければ主モニターの右上へ置く。</summary>
+    /// <remarks>右下はトーストの出現位置と衝突するため避ける。</remarks>
     private void PositionAtTopRight()
     {
+        if (_settings.WindowLeft is { } left && _settings.WindowTop is { } top)
+        {
+            Left = left;
+            Top = top;
+            return;
+        }
+
         var area = SystemParameters.WorkArea;
         Left = area.Right - Width - 16;
         Top = area.Top + 16;
     }
+
+    private void SaveWindowPosition() =>
+        (_settings with { WindowLeft = Left, WindowTop = Top }).Save();
+
+    /// <summary>取得を始める。</summary>
+    private void StartService()
+    {
+        var coordinate = new Coordinate(_settings.Latitude, _settings.Longitude);
+        _service = new ForecastService(coordinate);
+
+        _service.Updated += (_, snapshot) =>
+            _viewModel.Apply(snapshot.Forecast, snapshot.Alert, _settings.PlaceName, DateTimeOffset.UtcNow);
+
+        _service.Failed += (_, _) => _viewModel.ApplyFailure(_service.ConsecutiveFailures);
+
+        _service.Start();
+    }
+
+    private void OnRefreshNow(object sender, RoutedEventArgs e) => _service?.RefreshNow();
 
     /// <summary>トレイの表示を、いまの状態に合わせる。</summary>
     private void UpdateTrayState()
@@ -180,4 +213,19 @@ public partial class WidgetWindow : Window
     }
 
     private void OnExit(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
+
+    /// <summary>
+    /// 抱えている資源を放す。
+    /// </summary>
+    /// <remarks>
+    /// WPF の窓は本来 <see cref="IDisposable"/> を実装しないが、
+    /// 取得の常駐とトレイのアイコンを所有するため、閉じるときに明示的に放す。
+    /// </remarks>
+    public void Dispose()
+    {
+        _clickThrough?.Stop();
+        _service?.Dispose();
+        TrayIcon.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

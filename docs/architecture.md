@@ -35,11 +35,12 @@ FursuitWeather_Windows/
 │   │   ├── Briefing/               # 朝のブリーフィングの時期と中身
 │   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ
 │   │   └── Changes/                # 判定の悪化の検知
-│   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する（未実装）
+│   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する
 │       ├── app.manifest            # Per-Monitor V2を宣言する
 │       ├── Interop/                # Win32のP/Invoke
-│       ├── Resources/              # 配色トークン、バッジのStyle、アイコンのGeometry
-│       └── Views/
+│       ├── Resources/              # 配色トークン、トレイのアイコン
+│       ├── Services/               # 設定の保存、定期的な取得
+│       └── Views/                  # 小窓、クリックスルーの制御
 └── tests/
     └── FursuitWeather.Core.Tests/  # xUnit v3
 ```
