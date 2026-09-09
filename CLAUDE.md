@@ -7,9 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 FursuitWeather_Windowsは、Webサービス[FursuitWeather](https://fursuit-weather.223n.tech/)のAPIを読むWindowsのデスクトップクライアントです。
 本体は別のリポジトリにあり、この作業環境では`C:\dev\223n\FursuitWeather`に置かれています。
 
-**C#のコードはまだ1行もありません。**
-現状はGitHubのテンプレートに、技術選定の記録を`docs/`へ足した段階です。
-実装の判断はすべて`docs/`に根拠があるため、コードを書き始める前に読んでください。
+実装の判断はすべて`docs/`に根拠があります。
+コードを読む前に、その機能に対応する文書を読んでください。
+文書とコードが食い違っていたら、どちらが正かを決めてから直してください。
 
 | 文書 | 何が書いてあるか |
 | ---- | ---- |
@@ -17,6 +17,8 @@ FursuitWeather_Windowsは、Webサービス[FursuitWeather](https://fursuit-weat
 | `docs/architecture.md` | プロジェクトの分け方、依存パッケージ、実装で先に決めたこと |
 | `docs/api-client.md` | 本体のAPIを叩くときの制約 |
 | `docs/development.md` | 既存のCIとリリース運用にC#を載せるための変更点 |
+| `docs/notifications.md` | いつ通知を出すか。抑制の規則と文面。実測の根拠 |
+| `docs/update.md` | 更新の3つのモードと、その選び方 |
 | `docs/open-questions.md` | 未決の仕様と、確かめていない前提 |
 
 判定そのもの（暑さ指数の計算、レベルの判定、連続活動時間の算出）は本体のAPIが行います。
@@ -36,8 +38,7 @@ npm run lint:md:fix
 npm run lint:ja:fix
 ```
 
-C#のプロジェクトがまだ無いため、`dotnet`のコマンドは動きません。
-追加したあとは次を使います。
+`.NET`の側は次を使います。
 
 ```bash
 dotnet build -warnaserror
@@ -53,7 +54,7 @@ dotnet format --verify-no-changes
 
 根拠は`docs/stack.md`にあります。
 
-- `.NET 10`（LTS）とWPF。TargetFrameworkは`net10.0-windows10.0.19041.0`
+- `.NET 10`（LTS）とWPF。TargetFrameworkは`net10.0-windows10.0.22621.0`（下限はWindows 11 22H2）
 - Windows App SDK 2.4.0。`WindowsPackageType=None`の未パッケージで使います
 - `FursuitWeather.Core`はTargetFrameworkを`net10.0`のままにし、UIに依存させません。Linuxのランナーでもテストを回すためです
 - `FursuitWeather.Widget`が小窓とトレイの両方を1プロセスで受け持ちます
@@ -137,8 +138,8 @@ git flow feature start 変更の名前
 `lint:ja:fix`をかけたあとは差分を必ず確かめます。
 箇条書きの字下げを壊すことがあります。
 
-## テンプレートのまま残っているもの
+## まだ手を付けていないもの
 
-- `package.json`の`name`が`repo-template`です
-- `package.json`の`description`とルートの`README.md`がテンプレートの内容です
-- `scripts/setup.ps1`をまだ実行していません
+- `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
+- インストーラー（`installer/`）と更新の仕組みは、文書だけで実装がありません
+- トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります

@@ -4,8 +4,9 @@ namespace FursuitWeather.Core.Changes;
 
 /// <summary>出すべき通知。</summary>
 /// <remarks>
-/// 文面の組み立てとトーストの発行はUIの層が行う。
 /// ここは「何を、どの重さで出すか」までを決める。
+/// 文面の組み立ては <see cref="Notifications.NotificationText"/> が、
+/// トーストの発行はUIの層が行う。
 /// </remarks>
 public sealed record PendingNotification
 {
@@ -26,6 +27,17 @@ public sealed record PendingNotification
 
     /// <summary>いまのレベルID。</summary>
     public string CurrentLevel { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 前回のレベルの日本語ラベル。分からないときは空。
+    /// </summary>
+    /// <remarks>
+    /// APIが返したラベルをそのまま運ぶ。レベルIDから日本語へ引く表は持たない。
+    /// </remarks>
+    public string PreviousLabel { get; init; } = string.Empty;
+
+    /// <summary>いまのレベルの日本語ラベル。分からないときは空。</summary>
+    public string CurrentLabel { get; init; } = string.Empty;
 
     /// <summary>内容の署名。同じ署名の通知は再び出さない。</summary>
     public required string Signature { get; init; }

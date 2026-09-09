@@ -43,6 +43,17 @@ public sealed class ToastNotifier : IDisposable
     public bool IsAvailable =>
         _registered && AppNotificationManager.Default.Setting == AppNotificationSetting.Enabled;
 
+    /// <summary>
+    /// 利用者がWindowsの側で通知を切っているか。
+    /// </summary>
+    /// <remarks>
+    /// 登録はできているのに出せない状態を指す。
+    /// ランタイムが無くて登録できない状態とは区別する。
+    /// 前者は利用者が選んだ結果であり、後者は環境の不備だからである。
+    /// </remarks>
+    public bool IsBlockedByUser =>
+        _registered && AppNotificationManager.Default.Setting != AppNotificationSetting.Enabled;
+
     /// <summary>いまの設定を文字で返す。診断に使う。</summary>
     public string DescribeSetting()
     {

@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using FursuitWeather.Core.Api;
+using FursuitWeather.Core.Notifications;
 using FursuitWeather.Widget.Interop;
 using FursuitWeather.Widget.Services;
 using H.NotifyIcon;
@@ -38,14 +39,23 @@ public partial class WidgetWindow : Window, IDisposable
     private ForecastService? _service;
     private SettingsWindow? _settingsWindow;
     private readonly ToastNotifier _toast = new();
+    private readonly NotificationDispatcher _dispatcher;
     private WidgetSettings _settings = WidgetSettings.Load();
+    private ForecastSnapshot? _snapshot;
     private bool _hotKeyRegistered;
+    private bool _selfTestDetector;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
     {
         InitializeComponent();
         DataContext = _viewModel;
+
+        _dispatcher = new NotificationDispatcher(_toast);
+
+        // トーストが出せなかったぶんを小窓とトレイへ倒す。
+        // 通知だけが静かに壊れる状態を作らないための受け皿である
+        _dispatcher.FellBack += (_, message) => Dispatcher.Invoke(() => ShowFallback(message));
     }
 
     [LibraryImport("user32.dll", SetLastError = true)]
@@ -96,6 +106,10 @@ public partial class WidgetWindow : Window, IDisposable
         {
             RunNotificationSelfTest();
         }
+
+        // 変化の検知から文面までの配線を、実データで確かめるためのスイッチ。
+        // 予報を取れてからでないと判定できないため、最初の取得を待つ
+        _selfTestDetector = args.Contains("--self-test-detector", StringComparer.Ordinal);
 
         Closed += (_, _) =>
         {
@@ -203,12 +217,88 @@ public partial class WidgetWindow : Window, IDisposable
         var coordinate = new Coordinate(_settings.Latitude, _settings.Longitude);
         _service = new ForecastService(coordinate);
 
-        _service.Updated += (_, snapshot) =>
-            _viewModel.Apply(snapshot.Forecast, snapshot.Alert, _settings.PlaceName, DateTimeOffset.UtcNow);
+        _service.Updated += (_, snapshot) => OnForecastUpdated(snapshot);
 
-        _service.Failed += (_, _) => _viewModel.ApplyFailure(_service.ConsecutiveFailures);
+        _service.Failed += (_, _) =>
+            _viewModel.ApplyFailure(_service.ConsecutiveFailures, DateTimeOffset.UtcNow);
 
         _service.Start();
+    }
+
+    /// <summary>
+    /// 取得できた内容を、表示と通知の両方へ流す。
+    /// </summary>
+    /// <param name="snapshot">取得できた内容。</param>
+    /// <remarks>
+    /// 表示と通知で同じ時刻を使う。別々に時計を読むと、
+    /// 小窓には出ていない時間の悪化を通知が指す、といった食い違いが起こりうる。
+    /// </remarks>
+    private void OnForecastUpdated(ForecastSnapshot snapshot)
+    {
+        _snapshot = snapshot;
+        _viewModel.Apply(snapshot.Forecast, snapshot.Alert, _settings.PlaceName, snapshot.RetrievedAt);
+
+        _dispatcher.Process(
+            snapshot.Forecast,
+            snapshot.Alert,
+            new Coordinate(_settings.Latitude, _settings.Longitude),
+            _settings.PlaceName,
+            snapshot.RetrievedAt);
+
+        if (_selfTestDetector)
+        {
+            _selfTestDetector = false;
+            RunDetectorSelfTest(snapshot);
+        }
+    }
+
+    /// <summary>
+    /// トーストの代わりに、小窓とトレイで知らせる。
+    /// </summary>
+    /// <param name="message">届かなかった通知。</param>
+    /// <remarks>
+    /// <para>
+    /// トーストが出せないのは、ランタイムが無いときと、
+    /// 利用者がWindowsの側で通知を切っているときである。
+    /// どちらでも、安全に関わる知らせを黙って捨てない。
+    /// </para>
+    /// <para>
+    /// バルーンはトーストとは別の経路（<c>Shell_NotifyIcon</c>）を通る。
+    /// 片方が壊れていても、もう片方が届くことがある。
+    /// </para>
+    /// <para>
+    /// <b>利用者がWindowsの側で通知を切っている場合は、割り込まない。</b>
+    /// 小窓の文字は書き換えるが、隠れている小窓を出したりバルーンを鳴らしたりはしない。
+    /// 環境の不備を埋めるのが目的であって、利用者の選択を覆すのが目的ではない。
+    /// </para>
+    /// </remarks>
+    private void ShowFallback(NotificationMessage message)
+    {
+        // 小窓の文字は常に書き換える。小窓はもともと判定を出し続ける場所であり、割り込みではない
+        _viewModel.ApplyNotice($"{message.Title}　{string.Join("　", message.Lines)}", DateTimeOffset.UtcNow);
+
+        if (_toast.IsBlockedByUser)
+        {
+            UpdateTrayState();
+            return;
+        }
+
+        try
+        {
+            TrayIcon.ShowNotification(message.Title, string.Join(Environment.NewLine, message.Lines));
+        }
+        catch (InvalidOperationException)
+        {
+            // バルーンも出せなければ、小窓の表示だけが残る
+        }
+
+        // 「トレイだけ」を選んでいても、届かなかった知らせは目に入る場所へ出す
+        if (_settings.Layer != WindowLayer.TrayOnly)
+        {
+            Show();
+        }
+
+        UpdateTrayState();
     }
 
     private void OnRefreshNow(object sender, RoutedEventArgs e) => _service?.RefreshNow();
@@ -275,6 +365,10 @@ public partial class WidgetWindow : Window, IDisposable
     /// </remarks>
     private void ApplyNotificationSetting(bool initial)
     {
+        // 切っているあいだは判定も保存もしない。
+        // 理由は NotificationDispatcher.Process の注記にある
+        _dispatcher.Enabled = _settings.NotificationsEnabled;
+
         if (_settings.NotificationsEnabled)
         {
             var ok = _toast.Initialize(_ => Dispatcher.Invoke(() => ApplyLayer(ShowRequest.Notification)));
@@ -446,6 +540,99 @@ public partial class WidgetWindow : Window, IDisposable
         }
     }
 
+    /// <summary>
+    /// いまの予報で悪化が起きたとみなし、実際に通知を出してみる。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 「通知を試す」が確かめるのはトーストの発行だけである。
+    /// こちらは、予報の取得から変化の検知、文面の組み立て、発行までを通す。
+    /// </para>
+    /// <para>
+    /// 基準と履歴には触らない。試したせいで本物の通知が抑制されると本末転倒である。
+    /// </para>
+    /// </remarks>
+    private void OnPreviewNotification(object sender, RoutedEventArgs e)
+    {
+        if (_snapshot is not { } snapshot)
+        {
+            ShowDialog(
+                "まだ予報を取得できていません。" + Environment.NewLine +
+                "「いま取り直す」を試してから、もう一度実行してください。",
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var messages = NotificationDispatcher.Preview(
+            snapshot.Forecast,
+            snapshot.Alert,
+            new Coordinate(_settings.Latitude, _settings.Longitude),
+            _settings.PlaceName,
+            now);
+
+        if (messages.Count == 0)
+        {
+            ShowDialog(
+                "いまの予報では、出す通知がありませんでした。" + Environment.NewLine +
+                "判定が45分・ほぼ安全から悪化していない状態です。",
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var shown = _dispatcher.Deliver(messages, now);
+        var body = string.Join(
+            Environment.NewLine,
+            messages.Select(m => $"・{m.Title}{Environment.NewLine}　{string.Join(Environment.NewLine + "　", m.Lines)}"));
+
+        ShowDialog(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"いまの予報から{messages.Count}件を組み立て、{shown}件をトーストで出しました。{Environment.NewLine}{Environment.NewLine}{body}"),
+            MessageBoxImage.Information);
+    }
+
+    /// <summary>変化の検知から文面までを実データで通し、結果をファイルへ書く。</summary>
+    /// <param name="snapshot">取得できた内容。</param>
+    private void RunDetectorSelfTest(ForecastSnapshot snapshot)
+    {
+        var now = snapshot.RetrievedAt;
+        var messages = NotificationDispatcher.Preview(
+            snapshot.Forecast,
+            snapshot.Alert,
+            new Coordinate(_settings.Latitude, _settings.Longitude),
+            _settings.PlaceName,
+            now);
+
+        var shown = _dispatcher.Deliver(messages, now);
+
+        var report = new StringBuilder()
+            .AppendLine(CultureInfo.InvariantCulture, $"generatedAt={snapshot.Forecast.GeneratedAt:O}")
+            .AppendLine(CultureInfo.InvariantCulture, $"hours={snapshot.Forecast.Hours.Count}")
+            .AppendLine(CultureInfo.InvariantCulture, $"alert={(snapshot.Alert is null ? "none" : snapshot.Alert.PrefectureName)}")
+            .AppendLine(CultureInfo.InvariantCulture, $"messages={messages.Count}")
+            .AppendLine(CultureInfo.InvariantCulture, $"shown={shown}");
+
+        foreach (var message in messages)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"message={message.Describe()}");
+        }
+
+        report.AppendLine().AppendLine(_dispatcher.Describe(now));
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(WidgetSettings.Directory);
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(WidgetSettings.Directory, "detector-selftest.txt"),
+                report.ToString());
+        }
+        catch (System.IO.IOException)
+        {
+            // 記録に失敗しても本体は止めない
+        }
+    }
+
     /// <summary>トレイの表示を、いまの状態に合わせる。</summary>
     private void UpdateTrayState()
     {
@@ -520,6 +707,8 @@ public partial class WidgetWindow : Window, IDisposable
                 $"通知: 設定で{(_settings.NotificationsEnabled ? "入" : "切")} / 登録{(_toast.IsRegistered ? "済" : "なし")} / {_toast.DescribeSetting()}")
             .AppendLine(CultureInfo.InvariantCulture, $"自動起動: {StartupRegistration.GetState()}")
             .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
+            .AppendLine()
+            .AppendLine(_dispatcher.Describe(DateTimeOffset.UtcNow))
             .AppendLine()
             .AppendLine("Per-Monitor V2 が効いているかは、タスクマネージャーの")
             .AppendLine("「詳細」タブで「DPI 認識」の列を出して確かめてください。")
