@@ -186,6 +186,33 @@ public sealed class ToastNotifier : IDisposable
         _registered = false;
     }
 
+    /// <summary>
+    /// この端末からこのアプリの通知の登録を消す。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>アンインストールのときだけ呼ぶ。</b>
+    /// 終了のたびに呼ぶ <see cref="Shutdown"/> と違い、
+    /// 通知センターに残っている過去の通知ごと消える。
+    /// </para>
+    /// <para>
+    /// ランタイムが先に消えていると例外になる。
+    /// アンインストールを止めないため、握りつぶす。
+    /// </para>
+    /// </remarks>
+    public static void UnregisterAll()
+    {
+        try
+        {
+            AppNotificationManager.Default.UnregisterAll();
+        }
+        catch (Exception e) when (e is COMException or InvalidOperationException
+            or TypeInitializationException or DllNotFoundException)
+        {
+            // 消せなくてもアンインストールは続ける
+        }
+    }
+
     /// <summary>通知のアイコンの場所。</summary>
     private static Uri IconUri()
     {

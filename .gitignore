@@ -28,6 +28,9 @@ TestResults/
 # インストーラーの成果物
 AppPackages/
 dist/
+
+# インストーラーの組み立てで作る中間物（発行結果とランタイム）
+artifacts/
 *.msix
 *.msixbundle
 

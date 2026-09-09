@@ -113,6 +113,30 @@ public static class StartupRegistration
         }
     }
 
+    /// <summary>
+    /// 自動起動の登録を、無効のフラグごと消す。
+    /// </summary>
+    /// <remarks>
+    /// アンインストールのときに使う。
+    /// <see cref="Set"/> と違い実行ファイルの場所を要さないため、
+    /// 消す側の経路で「自分の場所が分からないから消せない」が起こらない。
+    /// フラグを残すと、入れ直したときに無効のまま始まる。
+    /// </remarks>
+    public static void Remove()
+    {
+        try
+        {
+            using var run = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            run?.DeleteValue(ValueName, throwOnMissingValue: false);
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            // 消せなくてもアンインストールは続ける
+        }
+
+        ClearDisabledFlag();
+    }
+
     /// <summary>Windowsの側で無効にされているかを見る。</summary>
     /// <remarks>
     /// 値はバイト列で、先頭のバイトの最下位のビットが立っていると無効を表す。
