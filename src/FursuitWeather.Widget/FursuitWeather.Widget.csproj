@@ -34,6 +34,19 @@
     -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
+    <!--
+      ランタイムが見つからないときに画面を出させない。
+
+      既定は OnNoMatch_ShowUI で、自動生成される初期化子が
+      Bootstrap.TryInitialize(..., OnNoMatch_ShowUI, out hr) を呼ぶ。
+      画面の無い環境ではその案内が閉じられず、プロセスが戻ってこない。
+      アンインストールは本体を1回起動して待つため、そこで止まる。
+
+      なお、これを None にしても失敗時の Environment.Exit(hr) は残る。
+      ランタイムが無い端末で「通知だけ諦めて起動する」ようにするには、
+      自動の初期化をやめて自分で呼ぶ必要がある。別途対応する。
+    -->
+    <WindowsAppSDKBootstrapAutoInitializeOptions_None>true</WindowsAppSDKBootstrapAutoInitializeOptions_None>
   </PropertyGroup>
 
   <ItemGroup>
