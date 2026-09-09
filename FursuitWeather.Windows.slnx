@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/FursuitWeather.Core/FursuitWeather.Core.csproj" />
+    <Project Path="src/FursuitWeather.Widget/FursuitWeather.Widget.csproj">
+      <Platform Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FursuitWeather.Core.Tests/FursuitWeather.Core.Tests.csproj" />
