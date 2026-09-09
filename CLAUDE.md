@@ -141,4 +141,4 @@ git flow feature start 変更の名前
 
 - `package.json`の`name`が`repo-template`です
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容です
-- `scripts/setup.sh`をまだ実行していません
+- `scripts/setup.ps1`をまだ実行していません

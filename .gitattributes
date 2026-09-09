@@ -10,6 +10,7 @@
 *.yml text
 *.yaml text
 *.sh text
+*.ps1 text
 
 # cmd.exe は CRLF を前提とする
 *.cmd text eol=crlf
