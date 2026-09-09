@@ -22,6 +22,9 @@
 #ifndef OutputDir
   #define OutputDir "dist"
 #endif
+#ifndef OutputSuffix
+  #define OutputSuffix ""
+#endif
 
 #define AppName "FursuitWeather"
 #define AppExeName "FursuitWeather.Widget.exe"
@@ -60,7 +63,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 OutputDir={#OutputDir}
-OutputBaseFilename={#AppName}-{#AppVersion}-x64-setup
+OutputBaseFilename={#AppName}-{#AppVersion}-x64-setup{#OutputSuffix}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -140,7 +143,10 @@ begin
   else
     Log(Format('ランタイム: 終了コード %d。入らなかった', [ResultCode]));
 #else
-  Log('ランタイム: 同梱していないため飛ばす。このインストーラーは配布に使えない');
+  { 同梱していないものを成功とみなさない。
+    真を返すと、配布に使えないインストーラーが黙って正常終了する }
+  Log('ランタイム: 同梱していない。このインストーラーは配布に使えない');
+  Result := False;
 #endif
 end;
 
@@ -152,6 +158,37 @@ end;
   実際にそれが起きた。
 
   ファイルを消す前に走らせる必要があるため usUninstall で行う。 }
+procedure RemoveStartupEntries();
+var
+  RunKey, ApprovedKey: string;
+begin
+  { 本体を起動せずにレジストリを直接消す退避の経路。
+    docs/architecture.md が「アプリが壊れて起動できない場合に備える」として要求している。
+
+    本体は Windows App SDK のブートストラッパーが ModuleInitializer から走るため、
+    ランタイムが無い端末では Main へ到達せずに終了する。
+    そのとき --uninstall-cleanup は1行も動かず、自動起動の登録が端末に残り、
+    サインインのたびに Windows が消えた exe を起動しようとする。 }
+  RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
+  ApprovedKey := 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';
+
+  if RegValueExists(HKEY_CURRENT_USER, RunKey, '{#AppName}') then
+  begin
+    if RegDeleteValue(HKEY_CURRENT_USER, RunKey, '{#AppName}') then
+      Log('後始末: Run キーの値を直接消した')
+    else
+      Log('後始末: Run キーの値を消せなかった');
+  end;
+
+  if RegValueExists(HKEY_CURRENT_USER, ApprovedKey, '{#AppName}') then
+  begin
+    if RegDeleteValue(HKEY_CURRENT_USER, ApprovedKey, '{#AppName}') then
+      Log('後始末: StartupApproved のフラグを直接消した')
+    else
+      Log('後始末: StartupApproved のフラグを消せなかった');
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
@@ -160,23 +197,20 @@ begin
   if CurUninstallStep <> usUninstall then
     Exit;
 
+  { 本体を1回起動して通知の登録を消させる。
+    これは best-effort である。起動できなくても後始末は続ける }
   Exe := ExpandConstant('{app}\{#AppExeName}');
   if not FileExists(Exe) then
-  begin
-    Log('後始末: 本体が無いため飛ばす: ' + Exe);
-    Exit;
-  end;
-
-  if not Exec(Exe, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    Log('後始末: 本体を起動できなかった');
-    Exit;
-  end;
-
-  if ResultCode = 0 then
-    Log('後始末: 済んだ')
+    Log('後始末: 本体が無いため起動を飛ばす: ' + Exe)
+  else if not Exec(Exe, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('後始末: 本体を起動できなかった')
+  else if ResultCode = 0 then
+    Log('後始末: 本体による後始末が済んだ')
   else
-    Log(Format('後始末: 終了コード %d で失敗した。通知の登録と自動起動の値が残っている可能性がある', [ResultCode]));
+    Log(Format('後始末: 本体が終了コード %d で失敗した。通知の登録が残っている可能性がある', [ResultCode]));
+
+  { 自動起動だけは本体に頼らない。ここが最後の砦になる }
+  RemoveStartupEntries();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -187,11 +221,16 @@ begin
   if InstallRuntime() then
     Exit;
 
-  { 止めない。アプリ自体は動き、通知だけが出なくなる。
-    黙って壊れるのが一番悪いので、そのことを伝える }
+  { 止めないが、実態どおりに伝える。
+    ブートストラッパーが ModuleInitializer から走るため、
+    ランタイムが無いとアプリは起動そのものができない。
+    「通知だけが出ない」と伝えるのは誤りだった }
   MsgBox(
     'Windows App SDK のランタイムを入れられませんでした。' + #13#10 +
-    'FursuitWeather は動きますが、トースト通知が出ません。' + #13#10#13#10 +
-    'トレイの「検証に使う情報を見る」で状態を確かめられます。',
-    mbInformation, MB_OK);
+    'このままでは FursuitWeather を起動できません。' + #13#10#13#10 +
+    '次のいずれかを試してください。' + #13#10 +
+    '  ・管理者に確認のうえ、もう一度インストールする' + #13#10 +
+    '  ・Microsoft の配布する Windows App Runtime を手で入れる' + #13#10#13#10 +
+    '詳しい経緯はインストールのログに残っています。',
+    mbError, MB_OK);
 end;

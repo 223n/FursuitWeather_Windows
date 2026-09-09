@@ -74,8 +74,12 @@ jobs:
         id: build
         shell: pwsh
         env:
-          # PR のときは inputs が無い。同梱を飛ばして速く回す
-          SKIP_RUNTIME: ${{ inputs.skip_runtime || github.event_name == 'pull_request' }}
+          # github.event_name は、workflow_call で呼ばれると「呼び元の」イベント名になる。
+          # release-publish.yml は pull_request(closed) で動くため、
+          # 人が release/* の PR をマージする通常のリリース経路でも 'pull_request' になり、
+          # ランタイムを同梱しないインストーラーが Release へ載っていた。
+          # tag が空かどうかで、本物の PR と呼び出しを見分ける
+          SKIP_RUNTIME: ${{ inputs.skip_runtime || (github.event_name == 'pull_request' && inputs.tag == '') }}
         run: |
           $params = @{}
           if ($env:SKIP_RUNTIME -eq 'true') {
@@ -106,8 +110,8 @@ jobs:
           }
 
       - name: 成果物として残す
-        # PR では残さない。ランタイムを欠いた配れないものを、置き場所だけ占めさせない
-        if: github.event_name != 'pull_request'
+        # 配れないもの（-noruntime）は残さない。置き場所を占めるだけで使い道がない
+        if: inputs.tag != '' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: installer-${{ steps.build.outputs.name }}
@@ -115,6 +119,22 @@ jobs:
           # Release へ添付したあとも、しばらくは手元で確かめられるようにする
           retention-days: 14
           if-no-files-found: error
+
+      - name: 同梱を確かめる
+        # 名前で見分ける。ランタイム未同梱のものは -noruntime が付く。
+        # ここを通さないと、通知が最初から出ない版が Release に載る
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          SETUP_NAME: ${{ steps.build.outputs.name }}
+        run: |
+          case "${SETUP_NAME}" in
+            *-noruntime.exe)
+              echo "::error::ランタイムを同梱していないインストーラーは Release へ添えない: ${SETUP_NAME}"
+              exit 1
+              ;;
+          esac
+          echo "同梱を確認した: ${SETUP_NAME}"
 
       - name: Releaseへ添える
         if: inputs.tag != ''

@@ -110,23 +110,47 @@ if (-not (Test-Path $publishedExe)) {
 # ---- Windows App SDK のランタイム
 if (-not $SkipRuntime -and -not $RuntimeInstaller) {
     $arch = if ($Runtime -eq 'win-arm64') { 'arm64' } else { 'x64' }
+
+    # 系列は Directory.Packages.props から引く。
+    # ここに版を打ち込むと、参照する Windows App SDK を上げたときに追随し損ねる。
+    # 未パッケージのブートストラッパーは、参照したのと同じ major.minor の
+    # Framework パッケージを要求するため、食い違うと起動そのものが失敗する。
+    # 実際に 1.8 を打ち込んだまま 2.4 を参照しており、
+    # 開発機に 2 系が入っていたせいで検証をすり抜けた
+    $propsPath = Join-Path $repoRoot 'Directory.Packages.props'
+    $sdkVersion = ([xml](Get-Content $propsPath -Raw)).Project.ItemGroup.PackageVersion |
+        Where-Object { $_.Include -eq 'Microsoft.WindowsAppSDK' } |
+        Select-Object -ExpandProperty Version
+    if (-not $sdkVersion) {
+        throw "Directory.Packages.props から Microsoft.WindowsAppSDK の版を読めませんでした。"
+    }
+    $channel = ($sdkVersion -split '\.')[0, 1] -join '.'
+    Write-Host "Windows App SDK: $sdkVersion（系列 $channel）"
+
     $cacheDir = Join-Path $repoRoot 'artifacts/runtime'
     New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
-    $RuntimeInstaller = Join-Path $cacheDir "WindowsAppRuntimeInstall-$arch.exe"
+    # 系列をファイル名に入れる。入れないと、系列を上げても古いキャッシュを掴み続ける
+    $RuntimeInstaller = Join-Path $cacheDir "WindowsAppRuntimeInstall-$channel-$arch.exe"
 
     if (Test-Path $RuntimeInstaller) {
         Write-Host "取得済みのランタイムを使います: $RuntimeInstaller"
     }
     else {
-        # aka.ms は「その系列の最新の安定版」を指す。
-        # 版を打ち込むと、修正が出るたびにここを直すことになる
-        $url = "https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-$arch.exe"
+        # aka.ms は「その系列の最新の安定版」を指す
+        $url = "https://aka.ms/windowsappsdk/$channel/latest/windowsappruntimeinstall-$arch.exe"
         Write-Host "ランタイムを取得しています: $url"
         Invoke-WebRequest -Uri $url -OutFile $RuntimeInstaller
     }
 
+    # 取ってきたものが本当にその系列かを確かめる。
+    # aka.ms のリダイレクト先が変わっても、黙って別の系列を配らないようにする
+    $actual = (Get-Item $RuntimeInstaller).VersionInfo.FileVersion
+    if ($actual -and -not $actual.StartsWith($channel)) {
+        throw "取得したランタイムの版が $actual で、要求する系列 $channel と違います。artifacts/runtime を消して取り直してください。"
+    }
+
     $sizeMb = [math]::Round((Get-Item $RuntimeInstaller).Length / 1MB, 1)
-    Write-Host "ランタイム: $sizeMb MB"
+    Write-Host "ランタイム: $actual（$sizeMb MB）"
 }
 
 # ---- Inno Setup
@@ -167,6 +191,9 @@ if ($RuntimeInstaller) {
     $isccArgs += "/DRuntimeInstaller=$RuntimeInstaller"
 }
 else {
+    # 名前で見分けられるようにする。
+    # 同じ名前だと、配れないものが Release へ上がったときに気付けない
+    $isccArgs += "/DOutputSuffix=-noruntime"
     Write-Warning 'ランタイムを同梱していません。このインストーラーは配布に使えません。'
 }
 
