@@ -73,7 +73,7 @@ Rainmeterが使っている250msのポーリングと補助のウィンドウは
 | 項目 | 状態 |
 | ---- | ---- |
 | `AllowsTransparency`の実際の描画コスト | Microsoftの定量的な情報は2006年から2008年のXPとVistaの世代で止まっており、現行の環境の公式な測定値は見つかりませんでした。面積が小さく更新も低頻度なら実害は小さいと**推定**していますが、実測ではありません |
-| Windows App SDK 2.4.0の未パッケージWPFでの実績 | framework-dependentかつ未パッケージでの`AppNotificationManager`の実挙動は未検証です。最小の実験アプリで1回通してください |
+| Windows App SDK 2.4.0の未パッケージWPFでの実績 | **確認済み**（2026年9月9日、Windows 11 25H2 / build 26200）。framework-dependentかつ未パッケージのWPFで`Register(displayName, iconUri)`が成功し、通知を出せました。`HKCU\SOFTWARE\Classes\AppUserModelId`にGUIDのキーが自動で作られ、`DisplayName`・`IconUri`・`CustomActivator`が書かれます。**スタートメニューのショートカットは不要**でした |
 | issue #6071の修正の取り込み | self-containedで`Register()`がCOMの例外になる不具合のPR #6725は、2026年9月3日にmainへマージされたものの、まだどのリリースタグにも入っていません。最新の安定版2.4.0は8月13日です。「修正済み」と読まないでください |
 | 非昇格での`WindowsAppRuntimeInstall.exe --quiet`の終了コード | インストーラーのソースを読む限り0が返る見込みです。ただし環境の要因で`AddPackageAsync`自体が`0x80070005`を返す可能性があり、実機での確認が要ります |
 | 通知のコールドローンチの分岐 | Microsoft Learnの本文とサンプルコードが食い違っています。本文は活性化の種類を`Launch`だとし、コードは`AppNotification`で分岐しています。両方の経路を通るコードを書いてください |
@@ -87,7 +87,7 @@ Rainmeterが使っている250msのポーリングと補助のウィンドウは
 | Font AwesomeのSVGをWPFのGeometryへ移すときの塗りつぶし規則 | SVGの既定はnonzero、WPFのPath Markup Syntaxの既定はEvenOddです。`fa-ban`などはデータの先頭に`F1`が要ると**推定**していますが、実際に描いて比べていません |
 | Modern Standby環境でのスリープ復帰 | `PowerModeChanged`が期待どおり発火するかを一次情報で確認できていません。単調時刻による経過の判定を基本の層に置けば、イベントが届かなくてもtickの周期で復帰できます |
 | Windows 11のトレイアイコンの既定 | **確認済み**。通知領域へ追加したアイコンは既定でオーバーフローへ入り、通知領域へ昇格させられるのは利用者だけです。初回の起動時に案内する設計が要ります。同じ文書が「通知領域は、直ちに対処が必要な重要な情報のためのものではない」と述べているため、トレイアイコンを唯一の窓口にしません |
-| `AppNotificationScenario.Urgent`の未パッケージのWPFでの実挙動 | 要件はWindows Insider Preview Build 22546以降とされています。実際に「応答不可」を突破するか、許可を求める画面がどう出るかは未検証です。突破できない場合、深夜の安全確保の設計が崩れます |
+| `AppNotificationScenario.Urgent`の未パッケージのWPFでの実挙動 | `IsUrgentScenarioSupported()`が`True`を返すことは**確認済み**です。ただし実際に「応答不可」を突破するか、許可を求める画面がどう出るかは未確認です |
 | `SHQueryUserNotificationState`による自動の退避 | 枠なし全画面のゲームが`QUNS_BUSY`を返すかは未確認です |
 | 最前面の小窓の画面キャプチャへの映り込み | 配信や画面共有に映ると**推定**しています。実測していません。設定の「ほかの窓に隠れてよい」が受け皿になります |
 | マルチモニタとDPIの変更 | **Per-Monitor V2が効いていることは確認済み**です（`AreDpiAwarenessContextsEqual`で判定。`GetProcessDpiAwareness`の列挙にはV2の値が無く、V1と区別できないため使えません）。ただし単一モニタでしか試していません。主モニタより左や上にモニタがある構成、モニタごとに違う倍率、`WM_DPICHANGED`と`AllowsTransparency`の組み合わせは未確認です |

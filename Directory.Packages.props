@@ -11,6 +11,11 @@
   <ItemGroup>
     <!-- 画面 -->
     <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <!--
+      通知に使う。2.x系の保守期限は2027年4月29日で、2.4へ上げても延びない。
+      3.0への移行を年次の作業として計画に入れること
+    -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>
