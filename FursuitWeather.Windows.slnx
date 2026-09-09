@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FursuitWeather.Core/FursuitWeather.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FursuitWeather.Core.Tests/FursuitWeather.Core.Tests.csproj" />
+  </Folder>
+</Solution>

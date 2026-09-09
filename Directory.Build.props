@@ -1,0 +1,49 @@
+<Project>
+
+  <!--
+    版は package.json の version を単一の情報源とする。
+    release.yml の npm version が書き換えたものをここで読むため、
+    .csproj に <Version> を直接書かない（二重管理になる）。
+
+    MSBuild の静的プロパティ関数の許可リストに System.IO.File と
+    System.Text.RegularExpressions.Regex が入っているため、この読み方ができる。
+    値が正しいかは `dotnet msbuild -getProperty:Version` で確かめること。
+  -->
+  <PropertyGroup>
+    <_PackageJsonPath>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', 'package.json'))</_PackageJsonPath>
+    <_PackageJsonText>$([System.IO.File]::ReadAllText('$(_PackageJsonPath)'))</_PackageJsonText>
+    <!-- 例: 1.2.0-rc.1 -->
+    <_SemVer>$([System.Text.RegularExpressions.Regex]::Replace($(_PackageJsonText), '(?s).*?"version"\s*:\s*"([^"]+)".*', '$1'))</_SemVer>
+    <!-- プレリリースの識別子を落とした数値のみの版。例: 1.2.0 -->
+    <_CoreVersion>$([System.Text.RegularExpressions.Regex]::Replace($(_SemVer), '-.*$', ''))</_CoreVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>$(_SemVer)</Version>
+    <AssemblyVersion>$(_CoreVersion).0</AssemblyVersion>
+    <FileVersion>$(_CoreVersion).0</FileVersion>
+    <InformationalVersion>$(_SemVer)</InformationalVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>FursuitWeather for Windows</Product>
+    <Company>223n</Company>
+    <Copyright>Copyright 223n</Copyright>
+    <RepositoryUrl>https://github.com/223n/FursuitWeather_Windows</RepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LangVersion>latestMajor</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      TreatWarningsAsErrors はここに書かない。
+      手元の試行錯誤を止めないため、CI の -warnaserror に任せる。
+    -->
+  </PropertyGroup>
+
+</Project>

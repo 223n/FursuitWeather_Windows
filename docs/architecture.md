@@ -25,21 +25,27 @@ FursuitWeather_Windows/
 ├── global.json                     # SDKの版を固定する
 ├── Directory.Build.props           # package.jsonから版を読む。共通の設定を集約する
 ├── Directory.Packages.props        # 依存パッケージの版を集約する
-├── FursuitWeather.Windows.sln
+├── FursuitWeather.Windows.slnx     # SDK 10 が作る新しい形式のソリューション
 ├── src/
 │   ├── FursuitWeather.Core/        # net10.0（Windowsに依存しない）
-│   │   ├── Api/                    # HttpClientによる取得
+│   │   ├── Api/                    # HttpClientによる取得、座標の丸め
 │   │   ├── Models/                 # DTO
-│   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ
-│   │   └── Changes/                # 判定の悪化の検知
-│   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する
+│   │   ├── Time/                   # タイムゾーンなしの日本時間の扱い
+│   │   ├── Forecast/               # 表示する1件の選択、鮮度の判定
+│   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ（未実装）
+│   │   └── Changes/                # 判定の悪化の検知（未実装）
+│   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する（未実装）
 │       ├── app.manifest            # Per-Monitor V2を宣言する
 │       ├── Interop/                # Win32のP/Invoke
 │       ├── Resources/              # 配色トークン、バッジのStyle、アイコンのGeometry
 │       └── Views/
 └── tests/
-    └── FursuitWeather.Core.Tests/  # xUnit
+    └── FursuitWeather.Core.Tests/  # xUnit v3
 ```
+
+ソリューションは`.sln`ではなく`.slnx`です。
+`.NET` SDK 10の`dotnet new sln`が作る形式で、XMLで書かれます。
+`dotnet build`や`dotnet format`はこのままのファイル名で受け付けます。
 
 小窓とトレイを別のプロセスに分けません。
 取得の重複、設定の共有、自動起動の二重管理という手間が、統合する手間を上回るためです。

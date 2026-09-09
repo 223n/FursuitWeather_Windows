@@ -55,6 +55,37 @@ jobs:
       - name: 日本語の書き方を検査する
         run: npm run lint:ja
 
+  build-dotnet:
+    name: .NETのビルドとテスト
+    # FursuitWeather.Core は Windows に依存しないため Linux で回せる。
+    # WPF のプロジェクトを足したときに、Windows のランナーで動くジョブを別に設ける
+    # （そのときは RUNS_ON ではなく RUNS_ON_WINDOWS を新設する。既存の変数は Linux 想定のため）
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: .NETを用意
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          # 版は global.json で固定している
+          global-json-file: global.json
+
+      - name: 依存を復元する
+        run: dotnet restore FursuitWeather.Windows.slnx
+
+      - name: 書式を検査する
+        run: dotnet format FursuitWeather.Windows.slnx --verify-no-changes --no-restore
+
+      - name: ビルドする
+        run: dotnet build FursuitWeather.Windows.slnx --no-restore --configuration Release -warnaserror
+
+      - name: テストする
+        run: dotnet test FursuitWeather.Windows.slnx --no-build --configuration Release
+
   lint-workflows:
     name: ワークフローの構文検査
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}

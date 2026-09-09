@@ -111,7 +111,10 @@ MSBuildの静的プロパティ関数の許可リストに`System.IO.File::ReadA
 
 ### ワークフロー
 
-`ci.yml`に4つ目のジョブとしてWindowsのビルドを足します。
+`ci.yml`には`build-dotnet`のジョブを足してあります。
+`FursuitWeather.Core`はWindowsに依存しないため、いまはLinuxのランナーで復元・書式検査・ビルド・テストを回しています。
+
+WPFのプロジェクトを足したときは、Windowsのランナーで動くジョブを別に設けます。
 
 **`vars.RUNS_ON`を使い回さないでください。**
 既存の3つのジョブ（32行目、60行目、83行目）はLinuxのセルフホストを想定しています。
