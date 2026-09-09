@@ -11,3 +11,8 @@ indent_size = 2
 [*.md]
 # Markdown は行末の空白2つが改行の意味を持つため削らない
 trim_trailing_whitespace = false
+
+[*.{cs,csx}]
+# C# の慣習に合わせる。上の [*] より細かいセクションが後勝ちする
+indent_size = 4
+tab_width = 4

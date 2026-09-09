@@ -10,3 +10,20 @@
 *.yml text
 *.yaml text
 *.sh text
+
+# cmd.exe は CRLF を前提とする
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# C# とインストーラーの定義
+*.cs text
+*.csproj text
+*.sln text
+*.props text
+*.iss text
+
+# 証明書と鍵はテキストとして扱わない
+*.pfx binary
+*.snk binary
+*.p12 binary
+*.cer binary
