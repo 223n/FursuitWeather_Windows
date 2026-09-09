@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 下限は Windows 11 22H2。Windows 10 の一般サポートは2025年10月14日に終了している -->
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Windows App SDK は AnyCPU に対応しない。通知を足すときに要るため、いまから明示しておく -->
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <!-- 画面の部品には公開ドキュメントを求めない -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      LibraryImport（P/Invoke のソース生成）が要求する。
+      Win32 の呼び出しはこのプロジェクトに閉じ込め、Core へは波及させない
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FursuitWeather.Core\FursuitWeather.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        色覚多様性へ配慮した配色。
+        本体の public/style.css のレベルの配色トークンと src/constants/badge.ts をそのまま写す。
+        ずれると同じ判定が別の色で出る。変えるときは本体と合わせること。
+
+        判定を色だけで伝えない。記号と文字を必ず併記する。
+    -->
+
+    <SolidColorBrush x:Key="Level0Surface" Color="#E5F5EF" />
+    <SolidColorBrush x:Key="Level0Text" Color="#006147" />
+    <SolidColorBrush x:Key="Level0Accent" Color="#009E73" />
+
+    <SolidColorBrush x:Key="Level1Surface" Color="#FCF0D8" />
+    <SolidColorBrush x:Key="Level1Text" Color="#6B4700" />
+    <SolidColorBrush x:Key="Level1Accent" Color="#A66E00" />
+
+    <SolidColorBrush x:Key="Level2Surface" Color="#FDE8D7" />
+    <SolidColorBrush x:Key="Level2Text" Color="#7A3100" />
+    <SolidColorBrush x:Key="Level2Accent" Color="#B34700" />
+
+    <SolidColorBrush x:Key="Level3Surface" Color="#FBE3DD" />
+    <SolidColorBrush x:Key="Level3Text" Color="#99260C" />
+    <SolidColorBrush x:Key="Level3Accent" Color="#CC3311" />
+
+    <SolidColorBrush x:Key="Level4Surface" Color="#F6D7D0" />
+    <SolidColorBrush x:Key="Level4Text" Color="#6E1100" />
+    <SolidColorBrush x:Key="Level4Accent" Color="#8A1500" />
+
+    <!-- 低温側。青系にして形でも区別する -->
+    <SolidColorBrush x:Key="LevelColdSurface" Color="#E1EFF8" />
+    <SolidColorBrush x:Key="LevelColdText" Color="#005180" />
+    <SolidColorBrush x:Key="LevelColdAccent" Color="#0072B2" />
+
+    <!--
+        カードの地は不透明にする。
+        最前面では背景が壁紙ではなく任意のアプリの画面になるため、
+        半透明とグレースケールのアンチエイリアスが重なると読みにくくなる。
+    -->
+    <SolidColorBrush x:Key="CardSurface" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="CardText" Color="#1A1A1A" />
+    <SolidColorBrush x:Key="CardMutedText" Color="#4A4A4A" />
+
+</ResourceDictionary>
