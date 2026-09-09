@@ -53,6 +53,7 @@
                     <Separator />
                     <MenuItem Header="設定" Click="OnOpenSettings" />
                     <MenuItem Header="通知を試す" Click="OnTestNotification" />
+                    <MenuItem Header="いまの予報で通知を組み立てる" Click="OnPreviewNotification" />
                     <MenuItem Header="検証に使う情報を見る" Click="OnShowDiagnostics" />
                     <MenuItem Header="終了" Click="OnExit" />
                 </ContextMenu>

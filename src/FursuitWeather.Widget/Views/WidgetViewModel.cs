@@ -16,6 +16,15 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
     /// <summary>gradeごとの記号。本体の <c>GRADE_SYMBOLS</c> と同じ。</summary>
     private static readonly string[] GradeSymbols = ["◎", "○", "△", "✕", "✕"];
 
+    /// <summary>
+    /// トーストの代わりにここへ出した知らせを、いつまで残すか。
+    /// </summary>
+    /// <remarks>
+    /// 消さずに残すと、過ぎた悪化がいつまでも出たままになる。
+    /// 短すぎると席を外しているあいだに消える。次の取得を数回はさむ長さにする。
+    /// </remarks>
+    private static readonly TimeSpan NoticeLifetime = TimeSpan.FromMinutes(45);
+
     private string _headerText = "読み込んでいます";
     private string _symbol = "…";
     private string _levelLabel = "取得中";
@@ -23,6 +32,9 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
     private string _detailText = string.Empty;
     private string _attributionText = string.Empty;
     private string _statusText = string.Empty;
+    private string _baseStatus = string.Empty;
+    private string _notice = string.Empty;
+    private DateTimeOffset _noticeAt;
     private Brush _surfaceBrush = Brushes.WhiteSmoke;
     private Brush _textBrush = Brushes.Black;
     private Brush _accentBrush = Brushes.Gray;
@@ -83,7 +95,11 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
         LevelLabel = "取得中";
         ActivityText = string.Empty;
         DetailText = string.Empty;
-        StatusText = "地点を変えました。新しい地点の予報をまだ取得できていません。";
+
+        // 前の地点についての知らせは、新しい地点では意味を持たない
+        _notice = string.Empty;
+        _baseStatus = "地点を変えました。新しい地点の予報をまだ取得できていません。";
+        RefreshStatus();
         SurfaceBrush = Brushes.WhiteSmoke;
         TextBrush = Brushes.Black;
         AccentBrush = Brushes.Gray;
@@ -108,7 +124,8 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
             Symbol = "…";
             ActivityText = string.Empty;
             DetailText = "予報の範囲から外れています。";
-            StatusText = string.Empty;
+            _baseStatus = string.Empty;
+            RefreshStatus();
             return;
         }
 
@@ -128,7 +145,9 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
             CultureInfo.InvariantCulture,
             $"気温 {hour.Weather.Temperature:0.#}℃　湿度 {hour.Weather.Humidity:0}%　補正後WBGT {outdoor.SuitWbgt:0.#}℃");
 
-        StatusText = BuildStatus(forecast, alert, now);
+        ExpireNotice(now);
+        _baseStatus = BuildStatus(forecast, alert, now);
+        RefreshStatus();
 
         var suffix = cold ? "Cold" : grade.ToString(CultureInfo.InvariantCulture);
         SurfaceBrush = Brush($"Level{suffix}Surface");
@@ -138,20 +157,67 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
 
     /// <summary>取りに行けなかったことを見せる。</summary>
     /// <param name="failures">続けて失敗した回数。</param>
-    public void ApplyFailure(int failures)
+    /// <param name="now">いまの時刻。</param>
+    /// <remarks>
+    /// ここでも知らせの期限を見る。
+    /// <see cref="Apply"/> でしか見ないと、取得が失敗し続けるあいだ知らせが消えない。
+    /// </remarks>
+    public void ApplyFailure(int failures, DateTimeOffset now)
     {
+        ExpireNotice(now);
+
         if (_pending)
         {
             // まだ一度も取れていない。古い判定は出ていないが、何も分からないことを伝える
-            StatusText = failures <= 1
+            _baseStatus = failures <= 1
                 ? "予報をまだ取得できていません。時間をおいて試します。"
                 : string.Create(CultureInfo.InvariantCulture, $"予報をまだ取得できていません（{failures}回続けて失敗）。");
+            RefreshStatus();
             return;
         }
 
-        StatusText = failures <= 1
+        _baseStatus = failures <= 1
             ? "取得に失敗しました。表示は前回の値です。"
             : string.Create(CultureInfo.InvariantCulture, $"取得に失敗しています（{failures}回続けて）。表示は前回の値です。");
+        RefreshStatus();
+    }
+
+    /// <summary>
+    /// トーストの代わりに、知らせを小窓へ出す。
+    /// </summary>
+    /// <param name="text">知らせの本文。</param>
+    /// <param name="now">いまの時刻。</param>
+    /// <remarks>
+    /// トーストが出せなかったときの受け皿である。
+    /// 通知だけが静かに壊れる状態を作らないために要る。
+    /// </remarks>
+    public void ApplyNotice(string text, DateTimeOffset now)
+    {
+        _notice = text ?? string.Empty;
+        _noticeAt = now;
+        RefreshStatus();
+    }
+
+    /// <summary>知らせが古くなっていれば消す。</summary>
+    private void ExpireNotice(DateTimeOffset now)
+    {
+        if (_notice.Length > 0 && now - _noticeAt > NoticeLifetime)
+        {
+            _notice = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 知らせと状態の一言を並べ直す。
+    /// </summary>
+    /// <remarks>
+    /// 知らせを前へ置く。行が入りきらないときに残るのは前のほうだからである。
+    /// </remarks>
+    private void RefreshStatus()
+    {
+        StatusText = _notice.Length > 0 && _baseStatus.Length > 0
+            ? $"{_notice}　{_baseStatus}"
+            : _notice + _baseStatus;
     }
 
     private static string BuildStatus(ForecastResponse forecast, HeatAlert? alert, DateTimeOffset now)

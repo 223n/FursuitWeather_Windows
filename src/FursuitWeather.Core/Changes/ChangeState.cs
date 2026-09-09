@@ -30,6 +30,17 @@ public sealed record ChangeState
     /// <summary>前回みたレベルID。</summary>
     public string LastLevel { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 前回みたレベルの日本語ラベル。
+    /// </summary>
+    /// <remarks>
+    /// 通知の文面に「警戒 → 厳重警戒」のように前後を並べるために持つ。
+    /// レベルIDから日本語へ引く表を持つとAPIの持つ文言を複製することになるため、
+    /// APIが返したラベルをそのまま覚えておく。
+    /// 古い保存内容から読んだときは空になる。文面の側で欠けても壊れないようにすること。
+    /// </remarks>
+    public string LastLabel { get; init; } = string.Empty;
+
     /// <summary>前回みた補正後のWBGT（℃）。</summary>
     public double LastSuitWbgt { get; init; }
 
@@ -72,6 +83,7 @@ public sealed record ChangeState
             BaselineGeneratedAt = forecast.GeneratedAt,
             LastMinutes = hour?.Outdoor.ActivityMinutes ?? 0,
             LastLevel = hour?.Outdoor.Level ?? string.Empty,
+            LastLabel = hour?.Outdoor.Label ?? string.Empty,
             LastSuitWbgt = hour?.Outdoor.SuitWbgt ?? 0d,
             DiscontinuedSuitWbgt = discontinuedSuitWbgt,
             AlertActive = alertActive,

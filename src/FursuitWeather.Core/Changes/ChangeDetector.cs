@@ -401,6 +401,7 @@ public static class ChangeDetector
             BaselineGeneratedAt = forecast.GeneratedAt,
             LastMinutes = current.ActivityMinutes,
             LastLevel = current.Level,
+            LastLabel = current.Label,
             LastSuitWbgt = current.SuitWbgt,
             DiscontinuedSuitWbgt = discontinued,
         };
@@ -413,6 +414,7 @@ public static class ChangeDetector
         DateTimeOffset now)
     {
         var level = target?.Outdoor.Level ?? state?.LastLevel ?? string.Empty;
+        var label = target?.Outdoor.Label ?? state?.LastLabel ?? string.Empty;
         var minutes = target?.Outdoor.ActivityMinutes ?? state?.LastMinutes ?? 0;
 
         return new PendingNotification
@@ -426,8 +428,10 @@ public static class ChangeDetector
                 $"{locationKey}|alert|{JstTime.ToLocal(now):yyyy-MM-dd}"),
             IsUrgent = true,
             CurrentLevel = level,
+            CurrentLabel = label,
             CurrentMinutes = minutes,
             PreviousLevel = state?.LastLevel ?? string.Empty,
+            PreviousLabel = state?.LastLabel ?? string.Empty,
             PreviousMinutes = state?.LastMinutes ?? 0,
             IsCold = target?.Outdoor.LevelId.IsCold() ?? false,
         };
@@ -446,6 +450,8 @@ public static class ChangeDetector
             CurrentMinutes = hour.Outdoor.ActivityMinutes,
             PreviousLevel = state.LastLevel,
             CurrentLevel = hour.Outdoor.Level,
+            PreviousLabel = state.LastLabel,
+            CurrentLabel = hour.Outdoor.Label,
             // 種類を含める。着用中止級と短縮が同じ署名にならないようにするため
             Signature = string.Create(
                 CultureInfo.InvariantCulture,
