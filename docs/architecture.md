@@ -32,8 +32,9 @@ FursuitWeather_Windows/
 │   │   ├── Models/                 # DTO
 │   │   ├── Time/                   # タイムゾーンなしの日本時間の扱い
 │   │   ├── Forecast/               # 表示する1件の選択、鮮度の判定
-│   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ（未実装）
-│   │   └── Changes/                # 判定の悪化の検知（未実装）
+│   │   ├── Briefing/               # 朝のブリーフィングの時期と中身
+│   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ
+│   │   └── Changes/                # 判定の悪化の検知
 │   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する（未実装）
 │       ├── app.manifest            # Per-Monitor V2を宣言する
 │       ├── Interop/                # Win32のP/Invoke
