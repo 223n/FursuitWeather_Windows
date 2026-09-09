@@ -225,6 +225,7 @@ Write-Step 'テンプレート由来の名前を、このリポジトリのも�
 .DESCRIPTION
 UTF-8（BOM無し）と改行 LF を保つ。
 元の shell 版は node を呼んでいたが、PowerShell では標準の機能で足りるため依存を減らした。
+-DryRun のときは書き込まないが、変えるものとして数える（まとめの表示を実際と合わせるため）。
 #>
 function Update-TemplateName {
     param(
@@ -233,6 +234,8 @@ function Update-TemplateName {
         [Parameter(Mandatory)][string]$To
     )
 
+    # 置き換える意味が無いものは触らない（テンプレートと持ち主が同じ場合など）
+    if ($From -ceq $To) { return $null }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
 
     $text = [System.IO.File]::ReadAllText($Path)
@@ -240,11 +243,12 @@ function Update-TemplateName {
 
     if ($DryRun) {
         Write-Host "  + ${Path}: $From → $To"
-        return $null
+    }
+    else {
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($Path, $text.Replace($From, $To), $utf8NoBom)
     }
 
-    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($Path, $text.Replace($From, $To), $utf8NoBom)
     return $Path
 }
 
