@@ -172,6 +172,10 @@ Windowsでは`.NET 10`以前はスリープ中の時間を含み、`.NET 11`で�
 Windows App SDKのランタイムをインストーラーが連鎖インストールする前提です。
 根拠は[技術選定](stack.md)の「配布方式」にあります。
 
+**未パッケージのWPFで動くことは実機で確認済みです**（2026年9月9日）。
+`Register(displayName, iconUri)`が成功し、通知が出ます。
+`IsUrgentScenarioSupported()`も`True`でした。
+
 登録には順序の決まりがあります。
 
 1. `NotificationInvoked`のハンドラーを先に登録します。順序を誤ると、通知の処理のために新しいプロセスが起動します

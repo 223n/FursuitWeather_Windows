@@ -36,6 +36,7 @@ public partial class WidgetWindow : Window, IDisposable
     private readonly WidgetViewModel _viewModel = new();
     private ClickThroughGuard? _clickThrough;
     private ForecastService? _service;
+    private readonly ToastNotifier _toast = new();
     private WidgetSettings _settings = WidgetSettings.Load();
     private bool _hotKeyRegistered;
 
@@ -69,6 +70,9 @@ public partial class WidgetWindow : Window, IDisposable
         _hotKeyRegistered = RegisterHotKey(handle, HotKeyId, ModControl | ModAlt | ModNoRepeat, VkF);
 
         UpdateTrayState();
+        // NotificationInvoked を Register より先に付ける。順序を誤ると
+        // 通知の処理のために新しいプロセスが起動する
+        _toast.Initialize(_ => Dispatcher.Invoke(() => { Show(); Activate(); }));
         StartService();
         // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
         TrayIcon.ForceCreate();
@@ -77,9 +81,18 @@ public partial class WidgetWindow : Window, IDisposable
         // 起動と同時にクリックスルーを入れる。人が触らなくても猶予で戻ることを外から観測できる
         // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
         // 起動と同時にクリックスルーを入れる
-        if (Environment.GetCommandLineArgs().Contains("--self-test-clickthrough", StringComparer.Ordinal))
+        var args = Environment.GetCommandLineArgs();
+
+        if (args.Contains("--self-test-clickthrough", StringComparer.Ordinal))
         {
             _clickThrough.Enable();
+        }
+
+        // 通知が本当に出るかを、人が触らずに確かめるためのスイッチ。
+        // 結果をファイルへ書き、外から読めるようにする
+        if (args.Contains("--self-test-notification", StringComparer.Ordinal))
+        {
+            RunNotificationSelfTest();
         }
 
         Closed += (_, _) =>
@@ -139,6 +152,70 @@ public partial class WidgetWindow : Window, IDisposable
     }
 
     private void OnRefreshNow(object sender, RoutedEventArgs e) => _service?.RefreshNow();
+
+    /// <summary>自己テストの結果をファイルへ書く。</summary>
+    private void RunNotificationSelfTest()
+    {
+        var shown = _toast.Show(
+            "着用中止（自己テスト）",
+            ["15時ごろ 危険 ・ 連続10分 → 0分", "通知が出るかを確かめています"]);
+
+        var report = string.Join(Environment.NewLine,
+            $"registered={_toast.IsRegistered}",
+            $"available={_toast.IsAvailable}",
+            $"setting={_toast.DescribeSetting()}",
+            $"urgentSupported={Microsoft.Windows.AppNotifications.Builder.AppNotificationBuilder.IsUrgentScenarioSupported()}",
+            $"shown={shown}");
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(WidgetSettings.Directory);
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(WidgetSettings.Directory, "notification-selftest.txt"),
+                report);
+        }
+        catch (System.IO.IOException)
+        {
+            // 記録に失敗しても本体は止めない
+        }
+    }
+
+    /// <summary>
+    /// 通知が本当に出るかを、この端末で確かめる。
+    /// </summary>
+    /// <remarks>
+    /// 未パッケージのWPFで <c>AppNotificationManager</c> が動くかは、
+    /// 通知の設計全体が乗っている前提である。実機で1回通しておく。
+    /// </remarks>
+    private void OnTestNotification(object sender, RoutedEventArgs e)
+    {
+        if (!_toast.IsRegistered)
+        {
+            MessageBox.Show(
+                this,
+                "通知を登録できていません。" + Environment.NewLine +
+                "Windows App SDK のランタイムが入っていない可能性があります。",
+                "FursuitWeather",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var shown = _toast.Show(
+            "着用中止（動作の確認）",
+            ["15時ごろ 危険 ・ 連続10分 → 0分", "これは通知が出るかを確かめるための表示です"],
+            urgent: false);
+
+        if (!shown)
+        {
+            MessageBox.Show(
+                this,
+                $"通知を出せませんでした。{Environment.NewLine}設定: {_toast.DescribeSetting()}",
+                "FursuitWeather",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
 
     /// <summary>トレイの表示を、いまの状態に合わせる。</summary>
     private void UpdateTrayState()
@@ -203,6 +280,8 @@ public partial class WidgetWindow : Window, IDisposable
             .AppendLine(CultureInfo.InvariantCulture, $"{_clickThrough?.Describe()}")
             .AppendLine(CultureInfo.InvariantCulture,
                 $"ホットキー(Ctrl+Alt+F): {(_hotKeyRegistered ? "登録できている" : "登録できていない")}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"通知の登録: {(_toast.IsRegistered ? "できている" : "できていない")} / 設定: {_toast.DescribeSetting()}")
             .AppendLine()
             .AppendLine("Per-Monitor V2 が効いているかは、タスクマネージャーの")
             .AppendLine("「詳細」タブで「DPI 認識」の列を出して確かめてください。")
@@ -225,6 +304,7 @@ public partial class WidgetWindow : Window, IDisposable
     {
         _clickThrough?.Stop();
         _service?.Dispose();
+        _toast.Dispose();
         TrayIcon.Dispose();
         GC.SuppressFinalize(this);
     }

@@ -27,8 +27,18 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      MSIX でパッケージ化しない。インストーラーが Windows App SDK の
+      ランタイムを連鎖インストールする前提で使う
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +47,8 @@
 
   <ItemGroup>
     <Resource Include="Resources\tray.ico" />
+    <!-- 通知のアイコンはファイルの場所を渡す必要があるため、実体も出力へ置く -->
+    <None Include="Resources\tray.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
