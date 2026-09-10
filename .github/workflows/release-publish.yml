@@ -293,7 +293,7 @@ jobs:
             .schemaVersion == 1
             and (.generatedAt | type == "string")
             and (.keyId | type == "string")
-            and (.channels.stable.version | test("^[0-9]+\.[0-9]+\.[0-9]+"))
+            and (.channels.stable.version | test("^[0-9]+[.][0-9]+[.][0-9]+"))
             and (.channels.stable.requirements.minimumOsBuild > 0)
             and (.channels.stable.packages | length == 1)
             and (.channels.stable.packages[0].arch == "x64")
