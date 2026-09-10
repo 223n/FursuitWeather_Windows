@@ -123,6 +123,32 @@ git flow feature start 変更の名前
 - マージはマージコミット（Create a merge commit）です。squashとrebaseは、リリースノートが壊れるため使いません
 - コミットメッセージは`[Add/Mod/Fix/Del/Doc]`の接頭辞と日本語で書きます。1行目は50文字程度に収め、理由は空行を挟んだ本文に書きます
 
+### PRのマージで`develop`や`main`を消さない
+
+**headが`develop`か`main`のPRをマージすると、そのブランチ自体が消えます。**
+develop→mainや、main→developのPRが該当します。
+
+消える経路が2つあります。
+
+- `gh pr merge --delete-branch`はheadのブランチを消します
+- リポジトリの「マージ後にheadを自動で消す」（`delete_branch_on_merge`）が有効です。付けなくても消えます
+
+**ルールセットの`deletion`は止めてくれません。**
+`main`のルールセットは`develop`と`main`の両方に`deletion`を掛けていますが、bypassが`RepositoryRole:always`です。
+管理者の資格情報では素通りします。
+実際に`main`へのforce-pushが`Bypassed rule violations`と出て通った記録があります。
+
+マージする前にheadを確かめます。
+
+```bash
+gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.baseRefName)"'
+```
+
+- **headが`develop`か`main`なら、マージしません。** そういうPRはそもそも作りません
+- `develop`と`main`を行き来させるのはリリースのワークフローだけです。headは`release/*`（→`main`）と`merge/*`（→`develop`）になり、消えてよいブランチです
+- **`main`は既定のブランチではないため、どちらの経路でも消えます。** いちばん危ないのはmain→developのPRです
+- `develop`は既定のブランチであるあいだ、GitHubが削除を拒みます。ただし既定を変えた瞬間に同じ危険にさらされます。これに頼らないでください
+
 ## 文書の書き方
 
 `**/*.md`のすべてがCIで検査されます。
