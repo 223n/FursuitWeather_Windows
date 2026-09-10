@@ -128,12 +128,31 @@ public sealed class UpdateDownloadStoreTests : IDisposable
     [InlineData("../setup.exe")]
     [InlineData("..\\setup.exe")]
     [InlineData("dir/setup.exe")]
+    [InlineData("dir\\setup.exe")]
+    [InlineData("C:setup.exe")]
+    [InlineData("..")]
+    [InlineData(".")]
     [InlineData("")]
     [InlineData("   ")]
+    [InlineData("setup	.exe")]
     public void ディレクトリを含む名前は受け付けない(string fileName)
     {
-        // マニフェストのURLから取った名前をそのまま使うと、狙った場所へ書けてしまう
+        // マニフェストのURLから取った名前をそのまま使うと、狙った場所へ書けてしまう。
+        //
+        // Path.GetFileName に頼ると、区切り文字の扱いが環境で変わる。
+        // Linux では円記号が区切りではないため、上から2つ目がそのまま通る。
+        // 実際に Linux のランナーでこのテストが落ちた
         Assert.ThrowsAny<ArgumentException>(() => Store().Create(fileName));
+    }
+
+    [Theory]
+    [InlineData("setup.exe")]
+    [InlineData("FursuitWeather-0.4.0-x64-setup.exe")]
+    public void ふつうの名前は受け付ける(string fileName)
+    {
+        var download = Store().Create(fileName);
+
+        Assert.EndsWith(fileName, download.Path, StringComparison.Ordinal);
     }
 
     [Fact]

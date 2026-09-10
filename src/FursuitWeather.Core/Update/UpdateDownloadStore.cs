@@ -147,10 +147,7 @@ public sealed class UpdateDownloadStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
 
-        // パスを組み立てる材料に、外から来た名前をそのまま使わない。
-        // マニフェストのURLから取った名前が ..\ を含むと、狙った場所へ書けてしまう
-        var safeName = System.IO.Path.GetFileName(fileName);
-        if (string.IsNullOrWhiteSpace(safeName) || safeName != fileName)
+        if (!IsSafeFileName(fileName))
         {
             throw new ArgumentException("ファイル名にディレクトリを含められません。", nameof(fileName));
         }
@@ -166,7 +163,38 @@ public sealed class UpdateDownloadStore
 
         System.IO.Directory.CreateDirectory(directory);
 
-        return new UpdateDownload(id, directory, System.IO.Path.Combine(directory, safeName));
+        return new UpdateDownload(id, directory, System.IO.Path.Combine(directory, fileName));
+    }
+
+    /// <summary>
+    /// ディレクトリを含まない名前かを見る。
+    /// </summary>
+    /// <param name="name">確かめる名前。</param>
+    /// <returns>そのまま使ってよければ true。</returns>
+    /// <remarks>
+    /// <para>
+    /// <b><see cref="System.IO.Path.GetFileName(string)"/> に頼ってはいけない。</b>
+    /// 区切り文字の扱いが環境で変わる。
+    /// Linuxでは <c>\</c> が区切りではないため <c>..\setup.exe</c> がそのまま通る。
+    /// Coreは環境に依存しない前提で書いており、実際にLinuxのランナーで落ちた。
+    /// </para>
+    /// <para>
+    /// 名前はマニフェストのURLから取る。外から来る値である。
+    /// 狙った場所へ書かせないための判定なので、自前で持つ。
+    /// </para>
+    /// </remarks>
+    private static bool IsSafeFileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name == "." || name == "..")
+        {
+            return false;
+        }
+
+        // 環境に関わらず、この3つは常に拒む
+        return !name.Contains('/', StringComparison.Ordinal) &&
+            !name.Contains('\\', StringComparison.Ordinal) &&
+            !name.Contains(':', StringComparison.Ordinal) &&
+            name.All(c => !char.IsControl(c));
     }
 
     /// <summary>
