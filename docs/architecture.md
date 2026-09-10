@@ -37,7 +37,8 @@ FursuitWeather_Windows/
 │   │   ├── Briefing/               # 朝のブリーフィングの時期と中身
 │   │   ├── Polling/                # 間隔の制御、復帰の検知、バックオフ
 │   │   ├── Changes/                # 判定の悪化の検知
-│   │   └── Notifications/          # 文面の組み立て、変化と朝の便りの統合
+│   │   ├── Notifications/          # 文面の組み立て、変化と朝の便りの統合
+│   │   └── Update/                 # 版の比較、マニフェストの検証
 │   └── FursuitWeather.Widget/      # net10.0-windows。小窓とトレイを1プロセスに統合する
 │       ├── app.manifest            # Per-Monitor V2を宣言する
 │       ├── Interop/                # Win32のP/Invoke
