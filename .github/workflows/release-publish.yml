@@ -53,6 +53,7 @@ jobs:
       pull-requests: write   # main を develop へ戻す PR を開く
     outputs:
       tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -232,11 +233,162 @@ jobs:
     with:
       tag: ${{ needs.publish.outputs.tag }}
 
+  manifest:
+    name: 更新のマニフェストを作る
+    # インストーラーの大きさとハッシュが要るため、組み立てのあとに走らせる
+    needs: [publish, installer]
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    env:
+      TAG: ${{ needs.publish.outputs.tag }}
+      VERSION: ${{ needs.publish.outputs.version }}
+      SETUP_NAME: ${{ needs.installer.outputs.name }}
+      SETUP_SIZE: ${{ needs.installer.outputs.size }}
+      SETUP_SHA256: ${{ needs.installer.outputs.sha256 }}
+    steps:
+      - name: 組み立てる
+        # jq で作る。文字列の連結で組むと、値に引用符が混ざったときに壊れる。
+        #
+        # packages[].url は版を含む恒久のURLにする。
+        # GitHub Releases の署名付きURLは約1時間で失効するため焼き込めない。
+        #
+        # インストーラーの引数はここに入れない。
+        # 入れると、マニフェストを乗っ取られたときに
+        # 「任意のexeを任意の引数で実行させる」経路になる
+        run: |
+          if [ -z "${SETUP_SHA256}" ] || [ -z "${SETUP_SIZE}" ]; then
+            echo "::error::インストーラーの大きさかハッシュを受け取れなかった"
+            exit 1
+          fi
+
+          url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${SETUP_NAME}"
+          notes="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+          jq -n             --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)"             --arg version "${VERSION}"             --arg releasedAt "$(date -u +%Y-%m-%d)"             --arg notesUrl "${notes}"             --arg url "${url}"             --arg sha256 "${SETUP_SHA256}"             --argjson size "${SETUP_SIZE}"             '{
+              schemaVersion: 1,
+              generatedAt: $generatedAt,
+              keyId: "fw-2026-01",
+              channels: {
+                stable: {
+                  version: $version,
+                  releasedAt: $releasedAt,
+                  notesUrl: $notesUrl,
+                  severity: "normal",
+                  mandatoryBelow: null,
+                  unsupportedBelow: null,
+                  requirements: { minimumOsBuild: 22621 },
+                  packages: [ { arch: "x64", url: $url, size: $size, sha256: $sha256 } ]
+                }
+              }
+            }' > update.json
+
+          cat update.json
+
+      - name: 形を確かめる
+        # クライアントの ManifestVerifier と同じ規則をここでも当てる。
+        # 通らないものへ署名しても、配った先で弾かれるだけである。
+        # 弾かれた側からは「更新が来ない」としか見えないため、ここで止める
+        run: |
+          jq -e '
+            .schemaVersion == 1
+            and (.generatedAt | type == "string")
+            and (.keyId | type == "string")
+            and (.channels.stable.version | test("^[0-9]+\.[0-9]+\.[0-9]+"))
+            and (.channels.stable.requirements.minimumOsBuild > 0)
+            and (.channels.stable.packages | length == 1)
+            and (.channels.stable.packages[0].arch == "x64")
+            and (.channels.stable.packages[0].size > 0)
+            and (.channels.stable.packages[0].sha256 | test("^[0-9a-f]{64}$"))
+            and (.channels.stable.packages[0].url | startswith("https://github.com/"))
+          ' update.json > /dev/null || {
+            echo "::error::組み立てたマニフェストがクライアントの規則を満たしていない"
+            exit 1
+          }
+          echo "形を確かめた"
+
+      - name: 受け渡す
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: update-manifest
+          path: update.json
+          retention-days: 7
+          if-no-files-found: error
+
+  sign:
+    name: マニフェストへ署名する
+    needs: manifest
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    # 私有鍵に触るのはこのジョブだけである。
+    # 承認もここだけで済むように、組み立てと添付は別のジョブへ分けてある
+    environment: release
+    steps:
+      - name: 受け取る
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: update-manifest
+
+      - name: 署名する
+        # 署名の形式は DER になる。
+        # クライアントは DSASignatureFormat.Rfc3279DerSequence で検証する。
+        # .NET の既定は P1363 のため、明示しないと正しい署名でも通らない
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "${SIGNING_KEY}" ]; then
+            echo "::error::RELEASE_SIGNING_KEY が空である。release 環境の secret を確かめる"
+            exit 1
+          fi
+
+          umask 077
+          printf '%s' "${SIGNING_KEY}" > signing.pem
+          trap 'rm -f signing.pem' EXIT
+
+          openssl dgst -sha256 -sign signing.pem -out update.json.sig update.json
+
+          # 公開鍵で戻して確かめる。ここを通らないものは配らない
+          openssl ec -in signing.pem -pubout -out verify.pub
+          openssl dgst -sha256 -verify verify.pub -signature update.json.sig update.json
+
+      - name: 受け渡す
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: update-signature
+          path: update.json.sig
+          retention-days: 7
+          if-no-files-found: error
+
+  attach:
+    name: マニフェストをReleaseへ添える
+    needs: [publish, manifest, sign]
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.publish.outputs.tag }}
+    steps:
+      - name: マニフェストを受け取る
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: update-manifest
+
+      - name: 署名を受け取る
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: update-signature
+
+      - name: 添える
+        run: |
+          gh release upload "${TAG}" update.json update.json.sig --clobber
+          echo "- 更新のマニフェスト: \`update.json\` と \`update.json.sig\`" >> "$GITHUB_STEP_SUMMARY"
+
   finalize:
     name: Releaseを公開する
     # インストーラーが添え終わってから下書きを外す。
     # ここまで来なければ Release は下書きのままで、利用者からは見えない
-    needs: [publish, installer]
+    needs: [publish, installer, attach]
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
     permissions:

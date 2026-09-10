@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-10T08:00:00Z",
+  "keyId": "fw-2026-01",
+  "channels": {
+    "stable": {
+      "version": "0.4.0",
+      "releasedAt": "2026-09-10",
+      "notesUrl": "https://github.com/223n/FursuitWeather_Windows/releases/tag/v0.4.0",
+      "severity": "normal",
+      "mandatoryBelow": null,
+      "unsupportedBelow": null,
+      "requirements": {
+        "minimumOsBuild": 22621
+      },
+      "packages": [
+        {
+          "arch": "x64",
+          "url": "https://github.com/223n/FursuitWeather_Windows/releases/download/v0.4.0/FursuitWeather-0.4.0-x64-setup.exe",
+          "size": 182452224,
+          "sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+        }
+      ]
+    }
+  }
+}

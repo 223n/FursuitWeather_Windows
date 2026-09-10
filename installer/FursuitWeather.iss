@@ -100,9 +100,82 @@ Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 Name: "desktopicon"; Description: "デスクトップにショートカットを作る"; Flags: unchecked
 
 [Run]
+; 人が入れたとき。完了のページのチェックボックスになる
 Filename: "{app}\{#AppExeName}"; Description: "{#AppName} を起動する"; Flags: nowait postinstall skipifsilent
+; 更新から入れたとき。
+; postinstall は完了のページの部品なので、サイレントでは意味を持たない。
+; skipifsilent と skipifnotsilent を並べるのが、サイレントでも起動し直す唯一の正攻法である。
+; /RELAUNCH=1 が付いているときだけ動かす。人が /VERYSILENT で入れたときに
+; 勝手に起動しないようにするためである
+Filename: "{app}\{#AppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldRelaunch
 
 [Code]
+{ 更新から呼ばれたときは、呼び元のプロセスが終わるのを待つ。
+
+  PrivilegesRequired=lowest では restartreplace が効かないと公式に明記されている。
+  そのため、実行中の exe を置き換える方法は「相手が自分で終わる」以外に無い。
+
+  呼び元は状態を書いてからインストーラーを起動し、すぐ自分を終える。
+  ここで終了を待ってからファイルを触る。AppMutex の判定より前に走らせる必要がある。 }
+
+const
+  SYNCHRONIZE = $00100000;
+  WAIT_TIMEOUT = $00000102;
+  { 呼び元が固まったときに、インストーラーまで固まらせない }
+  WAIT_LIMIT_MS = 30000;
+
+function OpenProcess(dwDesiredAccess: LongWord; bInheritHandle: Boolean; dwProcessId: LongWord): LongWord;
+  external 'OpenProcess@kernel32.dll stdcall';
+
+function WaitForSingleObject(hHandle: LongWord; dwMilliseconds: LongWord): LongWord;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+
+function CloseHandle(hObject: LongWord): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+{ 更新から呼ばれたときだけ、終わったあとにアプリを起動し直す。
+  人が /VERYSILENT で入れたときに、勝手に起動しないようにするためである }
+function ShouldRelaunch(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
+
+procedure WaitForCaller();
+var
+  Pid: Integer;
+  Handle: LongWord;
+  Waited: LongWord;
+begin
+  Pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  if Pid <= 0 then
+    Exit;
+
+  Log(Format('更新: PID %d の終了を待つ', [Pid]));
+
+  Handle := OpenProcess(SYNCHRONIZE, False, Pid);
+  if Handle = 0 then
+  begin
+    { もう終わっている。開けないこと自体は失敗ではない }
+    Log('更新: 呼び元のプロセスは見つからなかった。すでに終わっているとみなす');
+    Exit;
+  end;
+
+  Waited := WaitForSingleObject(Handle, WAIT_LIMIT_MS);
+  CloseHandle(Handle);
+
+  if Waited = WAIT_TIMEOUT then
+    Log('更新: 呼び元が時間内に終わらなかった。上書きに失敗する可能性がある')
+  else
+    Log('更新: 呼び元が終わった');
+end;
+
+{ AppMutex の判定より前に走らせる必要があるため、ここで待つ }
+function InitializeSetup(): Boolean;
+begin
+  WaitForCaller();
+  Result := True;
+end;
+
 { Windows App SDK のランタイムを連鎖インストールする。
 
   Inno の [Run] は終了コードを見ないため、失敗しても黙って進む。
