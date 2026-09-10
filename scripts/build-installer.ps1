@@ -219,13 +219,20 @@ if (-not (Test-Path $setupPath)) {
 $setup = Get-Item $setupPath
 
 $setupMb = [math]::Round($setup.Length / 1MB, 1)
+# 更新のマニフェストへ載せる。利用者が手で照合するためにも出す
+$setupSha = (Get-FileHash -LiteralPath $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+
 Write-Host ''
 Write-Host "できました: $($setup.FullName)"
-Write-Host "大きさ: $setupMb MB"
+Write-Host "大きさ: $setupMb MB（$($setup.Length) バイト）"
+Write-Host "SHA-256: $setupSha"
 
 # GitHub Actions から呼ばれたときは、後続のステップへ場所を渡す
 if ($env:GITHUB_OUTPUT) {
     "path=$($setup.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
     "name=$($setup.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
     "size_mb=$setupMb" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "size=$($setup.Length)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "sha256=$setupSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+    "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
