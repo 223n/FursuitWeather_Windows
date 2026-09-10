@@ -29,6 +29,16 @@ on:
         required: false
         type: boolean
         default: false
+    outputs:
+      name:
+        description: 'できたインストーラーのファイル名'
+        value: ${{ jobs.build.outputs.name }}
+      size:
+        description: '大きさ（バイト）'
+        value: ${{ jobs.build.outputs.size }}
+      sha256:
+        description: 'SHA-256（小文字の16進）'
+        value: ${{ jobs.build.outputs.sha256 }}
   workflow_dispatch:
     inputs:
       skip_runtime:
@@ -54,6 +64,10 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write # Release へ添付する
+    outputs:
+      name: ${{ steps.build.outputs.name }}
+      size: ${{ steps.build.outputs.size }}
+      sha256: ${{ steps.build.outputs.sha256 }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
