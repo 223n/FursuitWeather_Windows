@@ -50,7 +50,6 @@
                               IsCheckable="True"
                               Click="OnPinClickThrough" />
                     <Separator />
-                    <Separator />
                     <MenuItem Header="設定" Click="OnOpenSettings" />
                     <MenuItem Header="更新を確認" Click="OnCheckUpdate" />
                     <MenuItem x:Name="InstallUpdateItem"

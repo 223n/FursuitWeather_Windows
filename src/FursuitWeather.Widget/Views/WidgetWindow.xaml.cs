@@ -94,12 +94,10 @@ public partial class WidgetWindow : Window, IDisposable
         TrayIcon.ForceCreate(enablesEfficiencyMode: false);
         StartUpdates(Environment.GetCommandLineArgs());
 
-        // 自動で戻る仕組みが本当に効くかを機械で確かめるためのスイッチ。
-        // 起動と同時にクリックスルーを入れる。人が触らなくても猶予で戻ることを外から観測できる
-        // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
-        // 起動と同時にクリックスルーを入れる
         var args = Environment.GetCommandLineArgs();
 
+        // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
+        // 起動と同時にクリックスルーを入れる
         if (args.Contains("--self-test-clickthrough", StringComparer.Ordinal))
         {
             _clickThrough.Enable();
