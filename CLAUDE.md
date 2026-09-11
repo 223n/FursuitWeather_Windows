@@ -175,6 +175,5 @@ gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.base
 ## まだ手を付けていないもの
 
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
-- 更新のモードを選ぶ設定画面がありません。仕組みはできていますが、いまは既定の「取得だけ自動」でしか動きません
 - コード署名をしていません。SmartScreenの警告が出ます
 - トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります

@@ -101,9 +101,6 @@ public sealed class UpdateService : IDisposable
     /// <summary>見つかった更新の版。無ければ null。</summary>
     public SemanticVersion? AvailableVersion => _available?.Version;
 
-    /// <summary>見つかった更新の配布物の大きさ。無ければ null。</summary>
-    public long? AvailableSize => _available?.Package?.Size;
-
     /// <summary>
     /// トレイのツールチップに足す1行。出すものが無ければ null。
     /// </summary>
@@ -155,6 +152,13 @@ public sealed class UpdateService : IDisposable
         Running = ReadRunningVersion();
         _phase = DevicePhase();
         _state = UpdateStateStore.Load();
+
+        // 前のプロセスで確認していれば、「まだ確認していません」とは出さない。
+        // 最後に確認した日時と食い違って見える
+        if (_state.LastCheckedAt is not null)
+        {
+            LastMessage = "次の確認を待っています";
+        }
         _store = new UpdateDownloadStore(Path.Combine(WidgetSettings.Directory, "update"));
 
         _http = new HttpClient { Timeout = DownloadTimeout };
@@ -239,6 +243,83 @@ public sealed class UpdateService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 利用者が「確認」を押したときの流れ。確認し、取得が保留になっていれば尋ねてから取る。
+    /// </summary>
+    /// <param name="confirmDownload">取得してよいかを尋ねる。問いの文を受け取り、了解なら true を返す。</param>
+    /// <returns>終わるまで待つタスク。</returns>
+    /// <remarks>
+    /// <para>
+    /// 押されたのは「確認」であり、取得への同意ではない。
+    /// 従量制課金の回線で、黙って200MB近くを落とさない。
+    /// 問いには大きさと、保留した理由を必ず添える。
+    /// </para>
+    /// <para>
+    /// トレイの「更新を確認」と設定画面の「今すぐ確認」が、同じこの流れを通る。
+    /// </para>
+    /// </remarks>
+    public async Task CheckThenOfferDownloadAsync(Func<string, bool> confirmDownload)
+    {
+        ArgumentNullException.ThrowIfNull(confirmDownload);
+
+        await CheckNowAsync().ConfigureAwait(true);
+
+        if (_download is not null ||
+            _available?.Version is not { } version ||
+            _available.Package is not { } package ||
+            _state.Stage is not (UpdateStage.DownloadHeld or UpdateStage.UpdateAvailable or UpdateStage.DownloadPaused))
+        {
+            return;
+        }
+
+        var question = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{version} が出ています（約{package.Size / 1024d / 1024d:F0}MB）。\n{LastMessage}\n\n今すぐ取得しますか？");
+        if (!confirmDownload(question))
+        {
+            return;
+        }
+
+        await DownloadNowAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// 設定画面で選んだ扱いを当てる。
+    /// </summary>
+    /// <param name="mode">更新の扱い。</param>
+    /// <param name="pauseOnMetered">従量制課金の接続では自動で取得しないか。</param>
+    /// <param name="pauseOnBattery">電池で動いているあいだは自動で取得しないか。</param>
+    /// <returns>保存できたら true。</returns>
+    /// <remarks>
+    /// <para>
+    /// 扱いを変えたときだけ「利用者が自分で選んだ」と記録する。
+    /// 開いて保存しただけで立てると、既定を将来変えたときに誰にも当たらなくなる。
+    /// </para>
+    /// <para>
+    /// 保留を解く判断は1分ごとの見直しに任せる。
+    /// ここで取得やインストールを始めない。保存の直後に勝手に動き出さないようにする。
+    /// </para>
+    /// </remarks>
+    public bool ApplyPreferences(UpdateMode mode, bool pauseOnMetered, bool pauseOnBattery)
+    {
+        var next = _state with
+        {
+            Mode = mode,
+            ModeChosenByUser = _state.ModeChosenByUser || mode != _state.Mode,
+            PauseOnMetered = pauseOnMetered,
+            PauseOnBattery = pauseOnBattery,
+        };
+
+        if (!UpdateStateStore.Save(next))
+        {
+            return false;
+        }
+
+        _state = next;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     private async Task OnTickAsync()
     {
         if (_busy || _disposed)
@@ -300,9 +381,12 @@ public sealed class UpdateService : IDisposable
     {
         var now = DateTimeOffset.UtcNow;
 
-        if (_download is null &&
+        // UpdateAvailable も見る。「お知らせのみ」から扱いを変えたとき、ここで取得へ進める。
+        // 「お知らせのみ」のあいだは自動では何も進めないので、回線や電源を読みにいかない
+        if (_state.Mode != UpdateMode.NotifyOnly &&
+            _download is null &&
             _available?.Package is { } package &&
-            _state.Stage is UpdateStage.DownloadHeld or UpdateStage.DownloadPaused)
+            _state.Stage is UpdateStage.DownloadHeld or UpdateStage.DownloadPaused or UpdateStage.UpdateAvailable)
         {
             var gate = UpdateGate.ForDownload(_state, UpdateEnvironment.Read(package.Size), now);
             if (!gate.CanProceed)
