@@ -58,6 +58,38 @@ public partial class WidgetWindow : Window, IDisposable
         // トーストが出せなかったぶんを小窓とトレイへ倒す。
         // 通知だけが静かに壊れる状態を作らないための受け皿である
         _dispatcher.FellBack += (_, message) => Dispatcher.Invoke(() => ShowFallback(message));
+
+        if (_settings.Layer == WindowLayer.TrayOnly)
+        {
+            StartHidden();
+        }
+    }
+
+    /// <summary>
+    /// 小窓を出さずに起動する。「トレイだけ」のときに使う。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Window.SourceInitialized"/> の中で隠しても、小窓は出たままになる。
+    /// SourceInitialized は <see cref="Window.Show"/> の途中で起き、WPF はそのあとで窓を出す。
+    /// その時点の WPF は窓をまだ「見えていない」と記録しているため、<see cref="Window.Hide"/> は何もせずに戻る。
+    /// 実際に「トレイだけ」を選んでも、起動のたびに小窓が出ていた。
+    /// </para>
+    /// <para>
+    /// 先に隠しておくと、StartupUri は窓を出さない。Visibility が決まっている窓には手を出さない作りである。
+    /// ハンドルは EnsureHandle で作る。出さずに作っても SourceInitialized は起きるため、
+    /// トレイ、通知、ホットキー、更新は、出すときと同じ経路でつながる。
+    /// </para>
+    /// <para>
+    /// ハンドルはコンストラクターを抜けてから作る。
+    /// StartupUri の読み込みの中で作ると、SourceInitialized で起きた例外が XAML の例外に包まれ、
+    /// 落ちたときの画面に本当の理由が出ない。
+    /// </para>
+    /// </remarks>
+    private void StartHidden()
+    {
+        Hide();
+        Dispatcher.BeginInvoke(() => new WindowInteropHelper(this).EnsureHandle());
     }
 
     [LibraryImport("user32.dll", SetLastError = true)]
