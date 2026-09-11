@@ -36,12 +36,18 @@ public static class UpdateLedger
     /// <param name="state">いまの状態。</param>
     /// <param name="targetVersion">入れる版。</param>
     /// <param name="expectedSha256">入れる配布物のSHA-256。</param>
+    /// <param name="displayActive">いま掲示モードのあいだか。起動し直したあと掲示へ戻すかに使う。</param>
     /// <returns>書き入れたあとの状態。</returns>
     /// <remarks>
     /// <b>インストーラーの起動より前に保存すること。</b>
     /// 逆の順序だと、起動した直後に電源が落ちたときに中断を検知できない。
+    /// 掲示中だったかも、同じ書き込みで残す。
     /// </remarks>
-    public static UpdateState BeginInstall(UpdateState state, string targetVersion, string expectedSha256)
+    public static UpdateState BeginInstall(
+        UpdateState state,
+        string targetVersion,
+        string expectedSha256,
+        bool displayActive = false)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetVersion);
@@ -53,6 +59,7 @@ public static class UpdateLedger
             TargetVersion = targetVersion,
             ExpectedSha256 = expectedSha256,
             Attempts = UpdateRetryPolicy.Rebase(state.Attempts, targetVersion, expectedSha256),
+            ResumeDisplayAfterInstall = displayActive,
         };
     }
 
@@ -129,6 +136,7 @@ public static class UpdateLedger
             {
                 Stage = UpdateStage.Failed,
                 HasInterruptedInstall = true,
+                ResumeDisplayAfterInstall = false,
                 Attempts = attempts,
                 RecentFailedVersions = failed,
                 AutoUpdateDisabled = state.AutoUpdateDisabled || UpdateRetryPolicy.ShouldDisableAuto(failed),
@@ -323,5 +331,6 @@ public static class UpdateLedger
     {
         TargetVersion = string.Empty,
         ExpectedSha256 = string.Empty,
+        ResumeDisplayAfterInstall = false,
     };
 }

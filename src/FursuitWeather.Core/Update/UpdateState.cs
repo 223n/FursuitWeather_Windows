@@ -116,4 +116,19 @@ public sealed record UpdateState
     /// 無人で壊れた状態へ上書きを繰り返すのが、最も危ない。
     /// </remarks>
     public bool HasInterruptedInstall { get; init; }
+
+    /// <summary>
+    /// インストールを始めたとき、掲示モードのあいだだったか。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 更新のあとの起動し直しで、掲示へ戻すかを決めるのに使う。
+    /// 「起動したら掲示で始める」の設定では決めない。
+    /// 掲示を終えたあとの自動のインストールで掲示が戻ると、終えた操作が数分で覆るためである。
+    /// </para>
+    /// <para>
+    /// 次の起動で成否を確定したときに落とす。
+    /// </para>
+    /// </remarks>
+    public bool ResumeDisplayAfterInstall { get; init; }
 }

@@ -29,6 +29,52 @@ public sealed class UpdateLedgerTests
         Assert.Equal(UpdateStage.Installing, state.Stage);
         Assert.Equal("0.4.0", state.TargetVersion);
         Assert.Equal(Sha, state.ExpectedSha256);
+        Assert.False(state.ResumeDisplayAfterInstall);
+    }
+
+    [Fact]
+    public void 掲示中に始めたことを同じ書き込みで残す()
+    {
+        // 起動し直したあと掲示へ戻すかは、設定ではなくこれで決める
+        var state = UpdateLedger.BeginInstall(new UpdateState(), "0.4.0", Sha, displayActive: true);
+
+        Assert.True(state.ResumeDisplayAfterInstall);
+    }
+
+    [Fact]
+    public void 成功を確定したら掲示へ戻す印を落とす()
+    {
+        var installing = UpdateLedger.BeginInstall(new UpdateState(), "0.4.0", Sha, displayActive: true);
+
+        var (state, _) = UpdateLedger.Reconcile(installing, V("0.4.0"), Now);
+
+        Assert.False(state.ResumeDisplayAfterInstall);
+    }
+
+    [Fact]
+    public void 失敗を確定しても掲示へ戻す印を落とす()
+    {
+        var installing = UpdateLedger.BeginInstall(new UpdateState(), "0.4.0", Sha, displayActive: true);
+
+        var (state, outcome) = UpdateLedger.Reconcile(installing, V("0.3.0"), Now);
+
+        Assert.Equal(InstallOutcome.Failed, outcome);
+        Assert.False(state.ResumeDisplayAfterInstall);
+    }
+
+    [Fact]
+    public void 狙いを読めないときも掲示へ戻す印を落とす()
+    {
+        var installing = new UpdateState
+        {
+            Stage = UpdateStage.Installing,
+            TargetVersion = "こわれた値",
+            ResumeDisplayAfterInstall = true,
+        };
+
+        var (state, _) = UpdateLedger.Reconcile(installing, V("0.3.0"), Now);
+
+        Assert.False(state.ResumeDisplayAfterInstall);
     }
 
     // ---- 起動したときの確定
