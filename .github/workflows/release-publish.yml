@@ -380,8 +380,11 @@ jobs:
           name: update-signature
 
       - name: 添える
+        # --repo を付ける。このジョブはリポジトリを取得しておらず、
+        # gh が相手を推測できずに「not a git repository」で落ちる。
+        # 実際に v0.3.0-rc.4 でここが落ちた
         run: |
-          gh release upload "${TAG}" update.json update.json.sig --clobber
+          gh release upload "${TAG}" update.json update.json.sig --clobber --repo "${GITHUB_REPOSITORY}"
           echo "- 更新のマニフェスト: \`update.json\` と \`update.json.sig\`" >> "$GITHUB_STEP_SUMMARY"
 
   finalize:
