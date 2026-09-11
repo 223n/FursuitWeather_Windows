@@ -120,16 +120,16 @@ public partial class WidgetWindow : Window, IDisposable
         // 通知の処理のために新しいプロセスが起動する
         ApplyNotificationSetting(initial: true);
         StartService();
-        // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
-        TrayIcon.ForceCreate();
+        // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る。
+        // 引数を省くと、H.NotifyIcon はプロセス全体を効率モード（EcoQoS と IDLE の優先度）にする。
+        // 重い処理と重なったとき、予報の取得と通知が後回しにされうるため切る
+        TrayIcon.ForceCreate(enablesEfficiencyMode: false);
         StartUpdates(Environment.GetCommandLineArgs());
 
-        // 自動で戻る仕組みが本当に効くかを機械で確かめるためのスイッチ。
-        // 起動と同時にクリックスルーを入れる。人が触らなくても猶予で戻ることを外から観測できる
-        // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
-        // 起動と同時にクリックスルーを入れる
         var args = Environment.GetCommandLineArgs();
 
+        // 自動で戻る仕組みが効くかを、人が触らずに外から観測するためのスイッチ。
+        // 起動と同時にクリックスルーを入れる
         if (args.Contains("--self-test-clickthrough", StringComparer.Ordinal))
         {
             _clickThrough.Enable();
