@@ -19,6 +19,7 @@ FursuitWeather_Windowsは、Webサービス[FursuitWeather](https://fursuit-weat
 | `docs/development.md` | 既存のCIとリリース運用にC#を載せるための変更点 |
 | `docs/notifications.md` | いつ通知を出すか。抑制の規則と文面。実測の根拠 |
 | `docs/update.md` | 更新の3つのモードと、その選び方 |
+| `docs/display.md` | 会場の専用の端末で使う掲示モード。Mac版とWebとの関係、写さないもの |
 | `docs/open-questions.md` | 未決の仕様と、確かめていない前提 |
 
 判定そのもの（暑さ指数の計算、レベルの判定、連続活動時間の算出）は本体のAPIが行います。
