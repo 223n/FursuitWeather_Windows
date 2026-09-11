@@ -104,7 +104,8 @@ public sealed record UpdateState
     /// <summary>最後に利用者へ促した時刻。</summary>
     public DateTimeOffset? LastPromptAt { get; init; }
 
-    /// <summary>促した通算の回数。</summary>
+    /// <summary>いまの狙いについて、トーストで促した回数。</summary>
+    /// <remarks>狙いが変わったら <see cref="UpdateLedger.RecordAvailable"/> が0へ戻す。</remarks>
     public int PromptCount { get; init; }
 
     /// <summary>

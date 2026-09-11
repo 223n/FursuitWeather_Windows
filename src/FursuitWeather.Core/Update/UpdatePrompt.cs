@@ -28,8 +28,10 @@ public enum PromptChannel
 /// 7日で頭打ちにし、そこから先は同じ間隔で出し続ける。
 /// </para>
 /// <para>
-/// ただし割り込みは通算5回で止める。
+/// ただし割り込みは、1つの狙いにつき5回で止める。
 /// そのあとはトレイと小窓と設定画面にだけ残し、押したい人が押せる状態を保つ。
+/// 回数は新しい版を見つけたときに <see cref="UpdateLedger.RecordAvailable"/> が戻す。
+/// 戻さないと、アプリの生涯で5回しか知らせなくなる。
 /// </para>
 /// </remarks>
 public static class UpdatePrompt
@@ -46,7 +48,7 @@ public static class UpdatePrompt
     /// <summary>セキュリティの修正のときに待つ時間。伸ばさない。</summary>
     public static readonly TimeSpan SecurityInterval = TimeSpan.FromHours(24);
 
-    /// <summary>トーストで割り込む通算の上限。</summary>
+    /// <summary>1つの狙いについて、トーストで割り込む上限。</summary>
     public const int ToastLimit = 5;
 
     /// <summary>これより早い時刻には出さない（日本時間）。</summary>

@@ -37,6 +37,7 @@ public partial class WidgetWindow : Window, IDisposable
     private readonly WidgetViewModel _viewModel = new();
     private ClickThroughGuard? _clickThrough;
     private ForecastService? _service;
+    private UpdateService? _updates;
     private SettingsWindow? _settingsWindow;
     private readonly ToastNotifier _toast = new();
     private readonly NotificationDispatcher _dispatcher;
@@ -44,6 +45,7 @@ public partial class WidgetWindow : Window, IDisposable
     private ForecastSnapshot? _snapshot;
     private bool _hotKeyRegistered;
     private bool _selfTestDetector;
+    private bool _closed;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
@@ -88,6 +90,7 @@ public partial class WidgetWindow : Window, IDisposable
         StartService();
         // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る
         TrayIcon.ForceCreate();
+        StartUpdates(Environment.GetCommandLineArgs());
 
         // 自動で戻る仕組みが本当に効くかを機械で確かめるためのスイッチ。
         // 起動と同時にクリックスルーを入れる。人が触らなくても猶予で戻ることを外から観測できる
@@ -113,6 +116,8 @@ public partial class WidgetWindow : Window, IDisposable
 
         Closed += (_, _) =>
         {
+            _closed = true;
+
             if (_hotKeyRegistered)
             {
                 UnregisterHotKey(handle, HotKeyId);
@@ -209,6 +214,198 @@ public partial class WidgetWindow : Window, IDisposable
         SaveWindowPosition();
         _settings = WidgetSettings.Load();
         ApplyLayer(ShowRequest.User);
+    }
+
+    /// <summary>
+    /// 更新の確認を始める。
+    /// </summary>
+    /// <param name="args">起動の引数。</param>
+    /// <remarks>
+    /// <para>
+    /// 起動したら最初に、前回のインストールの成否を確定する。
+    /// 本体を起動し直すのはインストーラーであり、ここで狙った版と照らす。
+    /// </para>
+    /// <para>
+    /// <c>--update-manifest-url=</c> で確認先を差し替えられる。
+    /// <c>latest</c> はrcを指さないため、rcを試すときに版を直接指す。
+    /// 差し替えても署名の検証は変わらず効くため、偽のマニフェストは通らない。
+    /// </para>
+    /// </remarks>
+    private void StartUpdates(string[] args)
+    {
+        const string UrlSwitch = "--update-manifest-url=";
+        var url = args.FirstOrDefault(a => a.StartsWith(UrlSwitch, StringComparison.Ordinal))?[UrlSwitch.Length..];
+        if (url is null || !Uri.TryCreate(url, UriKind.Absolute, out var parsed) || parsed.Scheme != Uri.UriSchemeHttps)
+        {
+            url = UpdateService.LatestManifestUrl;
+        }
+
+        _updates = new UpdateService(url);
+
+        var outcome = _updates.ReconcileAtStartup();
+        if (outcome == Core.Update.InstallOutcome.Succeeded)
+        {
+            _toast.Show("FursuitWeather を更新しました", [_updates.LastMessage]);
+        }
+        else if (outcome == Core.Update.InstallOutcome.Failed)
+        {
+            _toast.Show("更新が途中で終わりました", [_updates.LastMessage, "トレイの「更新を確認」から入れ直せます"]);
+        }
+
+        _updates.Changed += (_, _) => UpdateUpdateMenu();
+        _updates.Notice += (_, message) => OnUpdateNotice(message);
+        _updates.InstallReady += (_, _) => InstallUpdate(manual: false);
+
+        UpdateUpdateMenu();
+        _updates.Start();
+
+        if (args.Contains("--self-test-update", StringComparer.Ordinal))
+        {
+            _ = RunUpdateSelfTestAsync(install: args.Contains("--self-test-update-install", StringComparer.Ordinal));
+        }
+    }
+
+    /// <summary>更新の知らせを、割り込むかどうか決めて出す。</summary>
+    private void OnUpdateNotice(string message)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        // 取得前の知らせで「インストール」へ誘うと、押しても無効の項目に行き当たる
+        var hint = _updates.HasDownloadedUpdate
+            ? "トレイの「更新をインストール」から入れられます"
+            : "トレイの「更新を確認」から受け取れます";
+
+        if (_updates.DecidePrompt() == Core.Update.PromptChannel.Toast &&
+            _toast.Show("FursuitWeather の更新", [message, hint]))
+        {
+            _updates.RecordPrompt();
+        }
+
+        UpdateUpdateMenu();
+    }
+
+    /// <summary>トレイの更新の項目を、いまの状態に合わせる。</summary>
+    private void UpdateUpdateMenu()
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        // 見出しに出すのは、実際に入る版である。見つけた版を出すと、新しい版が出た直後に食い違う
+        InstallUpdateItem.IsEnabled = _updates.HasDownloadedUpdate;
+        InstallUpdateItem.Header = _updates.DownloadedVersion is { } version
+            ? string.Create(CultureInfo.InvariantCulture, $"更新をインストール（{version}）")
+            : "更新をインストール";
+
+        UpdateTrayState();
+    }
+
+    private async void OnCheckUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        await _updates.CheckNowAsync().ConfigureAwait(true);
+
+        // 取得のゲートで止まっていたら、理由と大きさを見せてから尋ねる。
+        // 押されたのは「確認」であり、取得への同意ではない。
+        // 従量制課金の回線で、黙って200MB近くを落とさない
+        if (!_updates.HasDownloadedUpdate &&
+            _updates.AvailableVersion is { } version &&
+            _updates.AvailableSize is { } size &&
+            _updates.State.Stage is Core.Update.UpdateStage.DownloadHeld
+                or Core.Update.UpdateStage.UpdateAvailable
+                or Core.Update.UpdateStage.DownloadPaused)
+        {
+            var question = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{version} が出ています（約{size / 1024d / 1024d:F0}MB）。\n{_updates.LastMessage}\n\n今すぐ取得しますか？");
+            if (ShowDialog(question, MessageBoxImage.Question, MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            await _updates.DownloadNowAsync().ConfigureAwait(true);
+        }
+
+        ShowDialog(_updates.LastMessage, MessageBoxImage.Information);
+    }
+
+    private void OnInstallUpdate(object sender, RoutedEventArgs e) => InstallUpdate(manual: true);
+
+    /// <summary>
+    /// インストーラーへ引き渡し、自分を終える。
+    /// </summary>
+    /// <param name="manual">利用者が押したか。</param>
+    /// <remarks>
+    /// インストーラーは <c>/WAITPID</c> でこのプロセスの終了を待つ。
+    /// 起動できたら<b>すぐに</b>終える。トレイと通知の登録は、終了の処理で片付く。
+    /// </remarks>
+    private void InstallUpdate(bool manual)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        var reason = _updates.TryInstall(manual);
+        if (reason is null)
+        {
+            Application.Current.Shutdown();
+            return;
+        }
+
+        // 自動の経路で見送ったときは黙る。理由はサービスが状態に残し、診断の画面に出る
+        if (manual)
+        {
+            ShowDialog(reason, MessageBoxImage.Information);
+        }
+    }
+
+    /// <summary>更新の確認を1回通し、結果をファイルへ書く。</summary>
+    /// <param name="install">取得できたら、そのまま入れるか。</param>
+    /// <remarks>
+    /// <c>--self-test-update-install</c> を付けると、取得のあとにインストールまで進む。
+    /// 「更新をインストール」を押したのと同じ経路を通る。
+    /// 入れるのは署名とハッシュを通したものだけで、押した場合と変わらない。
+    /// 引き渡しは自分を終えるため、人が画面を触らずに確かめる手段が他に無い。
+    /// </remarks>
+    private async Task RunUpdateSelfTestAsync(bool install)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        await _updates.CheckNowAsync().ConfigureAwait(true);
+
+        try
+        {
+            System.IO.Directory.CreateDirectory(WidgetSettings.Directory);
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(WidgetSettings.Directory, "update-selftest.txt"),
+                string.Join(
+                    Environment.NewLine,
+                    _updates.Describe(),
+                    string.Create(CultureInfo.InvariantCulture, $"stage={_updates.State.Stage}"),
+                    string.Create(CultureInfo.InvariantCulture, $"available={_updates.AvailableVersion?.ToString() ?? "none"}"),
+                    string.Create(CultureInfo.InvariantCulture, $"downloaded={_updates.HasDownloadedUpdate}")));
+        }
+        catch (System.IO.IOException)
+        {
+            // 記録に失敗しても本体は止めない
+        }
+
+        if (install && _updates.HasDownloadedUpdate)
+        {
+            InstallUpdate(manual: true);
+        }
     }
 
     /// <summary>取得を始める。</summary>
@@ -397,12 +594,11 @@ public partial class WidgetWindow : Window, IDisposable
     /// 隠れている小窓を親にすると、案内が背面へ回って触れなくなる。
     /// 見えていないときは親を付けず、最前面で出す。
     /// </remarks>
-    private void ShowDialog(string text, MessageBoxImage icon)
+    private MessageBoxResult ShowDialog(string text, MessageBoxImage icon, MessageBoxButton buttons = MessageBoxButton.OK)
     {
         if (IsVisible)
         {
-            MessageBox.Show(this, text, "FursuitWeather", MessageBoxButton.OK, icon);
-            return;
+            return MessageBox.Show(this, text, "FursuitWeather", buttons, icon);
         }
 
         var host = new Window
@@ -420,7 +616,7 @@ public partial class WidgetWindow : Window, IDisposable
         host.Show();
         try
         {
-            MessageBox.Show(host, text, "FursuitWeather", MessageBoxButton.OK, icon);
+            return MessageBox.Show(host, text, "FursuitWeather", buttons, icon);
         }
         finally
         {
@@ -637,7 +833,18 @@ public partial class WidgetWindow : Window, IDisposable
     private void UpdateTrayState()
     {
         var state = _clickThrough?.Describe() ?? "クリックスルー: 切";
-        TrayIcon.ToolTipText = $"FursuitWeather\n{state}";
+
+        // 割り込まないと決めた更新の知らせも、ここには必ず出す
+        var tip = _updates?.TrayLine is { } update
+            ? $"FursuitWeather\n{state}\n{update}"
+            : $"FursuitWeather\n{state}";
+
+        // 更新の知らせは毎分渡し直されるため、変わったときだけ書く。書くたびにシェルへ通知が飛ぶ
+        if (!string.Equals(TrayIcon.ToolTipText, tip, StringComparison.Ordinal))
+        {
+            TrayIcon.ToolTipText = tip;
+        }
+
         ClickThroughItem.IsChecked = _clickThrough?.IsEnabled ?? false;
         PinItem.IsEnabled = _clickThrough?.IsEnabled ?? false;
         PinItem.IsChecked = _clickThrough?.IsPinned ?? false;
@@ -677,6 +884,24 @@ public partial class WidgetWindow : Window, IDisposable
         }
     }
 
+    /// <summary>
+    /// 2つ目の起動から求められて、小窓を出す。
+    /// </summary>
+    /// <remarks>
+    /// 2つ目は自分では何もせずに終わる。
+    /// 隠した小窓を出したくて起動した人に、何も起きないように見せないためである。
+    /// </remarks>
+    public void RevealForUser()
+    {
+        // 終わる途中で合図が来ることがある。閉じた窓を出そうとすると例外で落ちる
+        if (_closed)
+        {
+            return;
+        }
+
+        ApplyLayer(ShowRequest.User);
+    }
+
     private void OnToggleVisibility(object sender, RoutedEventArgs e)
     {
         if (IsVisible)
@@ -709,6 +934,7 @@ public partial class WidgetWindow : Window, IDisposable
             .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
             .AppendLine()
             .AppendLine(_dispatcher.Describe(DateTimeOffset.UtcNow))
+            .AppendLine(_updates?.Describe() ?? "更新: 未起動")
             .AppendLine()
             .AppendLine("Per-Monitor V2 が効いているかは、タスクマネージャーの")
             .AppendLine("「詳細」タブで「DPI 認識」の列を出して確かめてください。")
@@ -731,6 +957,7 @@ public partial class WidgetWindow : Window, IDisposable
     {
         _clickThrough?.Stop();
         _service?.Dispose();
+        _updates?.Dispose();
         _toast.Dispose();
         TrayIcon.Dispose();
         GC.SuppressFinalize(this);

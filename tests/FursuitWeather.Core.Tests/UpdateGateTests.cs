@@ -5,6 +5,9 @@ namespace FursuitWeather.Core.Tests;
 /// <summary>取得と適用の2つのゲートを見る。</summary>
 public sealed class UpdateGateTests
 {
+    private const string ShaA = "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b";
+    private const string ShaB = "60e4c1df2a6d10783be26203062cc612dd0a4f879fe80ef1f2d8b3d41f9a9514";
+
     private static readonly DateTimeOffset Now =
         new(2026, 9, 10, 12, 0, 0, TimeSpan.FromHours(9));
 
@@ -135,18 +138,120 @@ public sealed class UpdateGateTests
     }
 
     [Fact]
-    public void 取得の上限に達したら自動では試さない()
+    public void 取得の上限に達したら窓が明けるまで自動では試さない()
     {
+        // 6時間の待ちは過ぎているが、24時間の窓の中にいる
+        var last = Now.AddHours(-7);
         var attempts = new UpdateAttempts
         {
             DownloadFailures = UpdateRetryPolicy.DownloadDailyCap,
-            LastDownloadFailureAt = Now.AddDays(-1),
+            LastDownloadFailureAt = last,
         };
 
         var decision = UpdateGate.ForDownload(State(attempts: attempts), Conditions(), Now);
 
         Assert.Equal(GateOutcome.Hold, decision.Outcome);
         Assert.Equal(UpdateHoldReason.RetryBackoff, decision.Reason);
+
+        // 時間で解ける見送りは、解ける時刻を返す。
+        // null を返すと、呼び出し側が「解けない」と読んで試し直さない
+        Assert.Equal(last.AddHours(24), decision.RetryAt);
+    }
+
+    [Fact]
+    public void 取得の上限は窓が明ければ解ける()
+    {
+        var attempts = new UpdateAttempts
+        {
+            DownloadFailures = UpdateRetryPolicy.DownloadDailyCap,
+            LastDownloadFailureAt = Now.AddHours(-24),
+        };
+
+        var decision = UpdateGate.ForDownload(State(attempts: attempts), Conditions(), Now);
+
+        Assert.True(decision.CanProceed);
+    }
+
+    [Fact]
+    public void 前の版で上限に達しても次の版では試す()
+    {
+        // 失敗の記録は狙いの配布物に紐づく。
+        // 張り直さずに見ると、前の版の失敗で以後のどの版も自動で取らなくなる
+        var state = State(
+            mode: UpdateMode.DownloadOnly,
+            attempts: new UpdateAttempts
+            {
+                Version = "0.3.1",
+                ExpectedSha256 = ShaA,
+                DownloadFailures = UpdateRetryPolicy.DownloadDailyCap,
+                LastDownloadFailureAt = Now.AddHours(-7),
+            });
+        Assert.Equal(GateOutcome.Hold, UpdateGate.ForDownload(state, Conditions(), Now).Outcome);
+
+        state = UpdateLedger.RecordAvailable(state, "0.3.2", ShaB);
+
+        Assert.True(UpdateGate.ForDownload(state, Conditions(), Now).CanProceed);
+    }
+
+    [Fact]
+    public void 作り直された配布物では試す()
+    {
+        // 壊れた配布物を同じ版で出し直したときに、古い抑制を引きずらない
+        var state = State(
+            mode: UpdateMode.DownloadOnly,
+            attempts: new UpdateAttempts
+            {
+                Version = "0.3.1",
+                ExpectedSha256 = ShaA,
+                DownloadFailures = UpdateRetryPolicy.DownloadDailyCap,
+                LastDownloadFailureAt = Now.AddHours(-7),
+            });
+
+        state = UpdateLedger.RecordAvailable(state, "0.3.1", ShaB);
+
+        Assert.True(UpdateGate.ForDownload(state, Conditions(), Now).CanProceed);
+    }
+
+    [Fact]
+    public void 毎日1回の失敗が続いても自動の取得は止まらない()
+    {
+        // 確認は1日に1回である。累計で5回数えると、6日目から永久に止まっていた
+        var state = State(mode: UpdateMode.DownloadOnly);
+        state = UpdateLedger.RecordAvailable(state, "0.3.1", ShaA);
+
+        for (var day = 0; day < 10; day++)
+        {
+            var at = Now.AddDays(day);
+            Assert.True(UpdateGate.ForDownload(state, Conditions(), at).CanProceed, $"{day}日目");
+
+            state = UpdateLedger.RecordDownloadFailure(state, "0.3.1", ShaA, at);
+        }
+    }
+
+    [Fact]
+    public void 続けて失敗したら待ちを伸ばし窓が明ければまた試す()
+    {
+        var state = State(mode: UpdateMode.DownloadOnly);
+        state = UpdateLedger.RecordAvailable(state, "0.3.1", ShaA);
+
+        // 1分、5分、15分、1時間の待ちを挟んで5回失敗する
+        var at = Now;
+        foreach (var wait in new[] { 0, 1, 5, 15, 60 })
+        {
+            at = at.AddMinutes(wait);
+            Assert.True(UpdateGate.ForDownload(state, Conditions(), at).CanProceed);
+            state = UpdateLedger.RecordDownloadFailure(state, "0.3.1", ShaA, at);
+        }
+
+        var held = UpdateGate.ForDownload(state, Conditions(), at.AddHours(6));
+        Assert.Equal(GateOutcome.Hold, held.Outcome);
+        Assert.Equal(at.AddHours(24), held.RetryAt);
+
+        Assert.True(UpdateGate.ForDownload(state, Conditions(), at.AddHours(24)).CanProceed);
+
+        // 窓が明けたあとの失敗は1回目として数える。1日に1回しか試せなくならない
+        state = UpdateLedger.RecordDownloadFailure(state, "0.3.1", ShaA, at.AddHours(24));
+        Assert.Equal(1, state.Attempts.DownloadFailures);
     }
 
     // ---- 適用のゲート

@@ -34,6 +34,15 @@ public static class UpdateRetryPolicy
     /// <summary>1日に自動で取得を試す上限。</summary>
     public const int DownloadDailyCap = 5;
 
+    /// <summary>
+    /// 取得の失敗を数える窓。
+    /// </summary>
+    /// <remarks>
+    /// 最後の失敗からこれだけ経てば、数え直す。
+    /// 窓を持たずに累計で数えると、回線が悪かった数日のせいで自動の取得が二度と動かなくなる。
+    /// </remarks>
+    public static readonly TimeSpan DownloadWindow = TimeSpan.FromHours(24);
+
     /// <summary>1つの版について、自動でインストールを試す上限。</summary>
     public const int InstallCap = 3;
 
@@ -63,11 +72,44 @@ public static class UpdateRetryPolicy
 
     /// <summary>1日の上限まで取得を試したか。</summary>
     /// <param name="attempts">失敗の記録。</param>
+    /// <param name="now">いまの時刻。</param>
     /// <returns>上限に達していれば true。</returns>
-    public static bool IsDownloadExhausted(UpdateAttempts attempts)
+    /// <remarks>
+    /// <para>
+    /// 上限が効くのは、最後の失敗から <see cref="DownloadWindow"/> のあいだだけである。
+    /// 窓が明けたら、また自動で試してよい。
+    /// </para>
+    /// <para>
+    /// 失敗の時刻が無い記録は、上限に達していないとみなす。
+    /// 窓を決められないものを止める側へ倒すと、二度と解けない。
+    /// </para>
+    /// </remarks>
+    public static bool IsDownloadExhausted(UpdateAttempts attempts, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(attempts);
-        return attempts.DownloadFailures >= DownloadDailyCap;
+
+        return attempts.DownloadFailures >= DownloadDailyCap &&
+            attempts.LastDownloadFailureAt is { } last &&
+            now - last < DownloadWindow;
+    }
+
+    /// <summary>
+    /// 窓が明けていれば、取得の失敗を数え直した記録を返す。
+    /// </summary>
+    /// <param name="attempts">いまの記録。</param>
+    /// <param name="now">いまの時刻。</param>
+    /// <returns>使ってよい記録。</returns>
+    /// <remarks>
+    /// 失敗を書き入れる前に通す。
+    /// 通さないと、窓が明けたあとの1回の失敗でまた上限に届き、1日に1回しか試せなくなる。
+    /// </remarks>
+    public static UpdateAttempts ExpireDownloadFailures(UpdateAttempts attempts, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(attempts);
+
+        return attempts.LastDownloadFailureAt is { } last && now - last >= DownloadWindow
+            ? attempts with { DownloadFailures = 0, LastDownloadFailureAt = null }
+            : attempts;
     }
 
     /// <summary>

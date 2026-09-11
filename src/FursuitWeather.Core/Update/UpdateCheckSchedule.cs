@@ -91,10 +91,22 @@ public static class UpdateCheckSchedule
     /// <param name="uptime">アプリが起動してからの時間。</param>
     /// <param name="phase">端末ごとに決めた0以上1未満の値。</param>
     /// <param name="options">調整値。省略すると既定値。</param>
+    /// <param name="answeredThisSession">
+    /// このプロセスで、確かな答えを得たか。
+    /// 通信に失敗した確認や、署名の通らなかった確認は答えに数えない。
+    /// </param>
     /// <returns>行くべきなら true。</returns>
     /// <remarks>
+    /// <para>
     /// <b>確認だけは、どのモードでも自動で行う。</b>
     /// 止まるのは取得と適用である。
+    /// </para>
+    /// <para>
+    /// 更新が途中のまま起動したときは、確かな答えを得るまで周期を待たずに確認する。
+    /// 見つけた更新はメモリにしか持たないため、確認し直さないと次の周期まで何も進まない。
+    /// 起動の直後の待ちは、この場合も効かせる。
+    /// 答えを得られなかったあとの間隔は、呼び出し側が <see cref="UnansweredRetryDelay"/> で空ける。
+    /// </para>
     /// </remarks>
     public static bool IsDue(
         UpdateState state,
@@ -102,7 +114,8 @@ public static class UpdateCheckSchedule
         TimeSpan monotonic,
         TimeSpan uptime,
         double phase,
-        UpdateCheckOptions? options = null)
+        UpdateCheckOptions? options = null,
+        bool answeredThisSession = true)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -118,10 +131,89 @@ public static class UpdateCheckSchedule
             return true;
         }
 
+        if (!answeredThisSession && IsPending(state.Stage))
+        {
+            return true;
+        }
+
         var interval = EffectiveInterval(phase, options);
 
         // どちらか一方でも越えていれば行く。
         // 壁時計は利用者の時刻の変更で戻りうるため、単調時刻の側が受け皿になる
         return wallClock - lastWall >= interval || monotonic - lastMonotonic >= interval;
     }
+
+    /// <summary>
+    /// 確かな答えを得られなかった確認のあと、次に試すまで待つ時間。
+    /// </summary>
+    /// <remarks>
+    /// 最後の値で頭打ちにする。
+    /// 待たずに試すと、回線が切れているあいだ毎分叩き続ける。
+    /// 使い切りにすると、起動した直後の1回の失敗で途中の更新が翌日まで止まる。
+    /// </remarks>
+    public static IReadOnlyList<TimeSpan> UnansweredRetryDelays { get; } =
+    [
+        TimeSpan.FromMinutes(5),
+        TimeSpan.FromMinutes(15),
+        TimeSpan.FromHours(1),
+    ];
+
+    /// <summary>
+    /// 確かな答えを得られなかった確認が続いたときに、次に試すまで待つ時間。
+    /// </summary>
+    /// <param name="failures">続けて答えを得られなかった回数。</param>
+    /// <returns>待つ時間。1回も失敗していなければ0。</returns>
+    public static TimeSpan UnansweredRetryDelay(int failures) =>
+        failures <= 0
+            ? TimeSpan.Zero
+            : UnansweredRetryDelays[Math.Min(failures - 1, UnansweredRetryDelays.Count - 1)];
+
+    /// <summary>
+    /// 確かな答えを得られなかった確認のあと、まだ待つべきか。
+    /// </summary>
+    /// <param name="failures">続けて答えを得られなかった回数。</param>
+    /// <param name="lastWallClock">最後に答えを得られなかった壁時計の時刻。無ければ null。</param>
+    /// <param name="lastMonotonic">同じときの単調時刻。無ければ null。</param>
+    /// <param name="wallClock">いまの壁時計。</param>
+    /// <param name="monotonic">いまの単調時刻。</param>
+    /// <returns>待つべきなら true。</returns>
+    /// <remarks>
+    /// 壁時計と単調時刻のどちらかが待ちを越えたら、待ちを終える。
+    /// 壁時計だけで決めると、時計が戻った幅だけ試し直しが止まる。
+    /// 周期の判定（<see cref="IsDue"/>）と同じ考え方である。
+    /// </remarks>
+    public static bool IsWaitingAfterUnanswered(
+        int failures,
+        DateTimeOffset? lastWallClock,
+        TimeSpan? lastMonotonic,
+        DateTimeOffset wallClock,
+        TimeSpan monotonic)
+    {
+        if (lastWallClock is not { } lastWall || lastMonotonic is not { } lastTick)
+        {
+            return false;
+        }
+
+        var delay = UnansweredRetryDelay(failures);
+        return wallClock - lastWall < delay && monotonic - lastTick < delay;
+    }
+
+    /// <summary>
+    /// 更新が途中の状態か。
+    /// </summary>
+    /// <param name="stage">保存してあった進み具合。</param>
+    /// <returns>途中なら true。</returns>
+    /// <remarks>
+    /// 失敗と確定したものも含める。
+    /// 入れ直しを案内しているため、確認し直して取得までは進めておく。
+    /// </remarks>
+    public static bool IsPending(UpdateStage stage) => stage is
+        UpdateStage.Checking or
+        UpdateStage.UpdateAvailable or
+        UpdateStage.DownloadHeld or
+        UpdateStage.Downloading or
+        UpdateStage.DownloadPaused or
+        UpdateStage.Downloaded or
+        UpdateStage.InstallHeld or
+        UpdateStage.Failed;
 }

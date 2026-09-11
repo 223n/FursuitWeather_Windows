@@ -247,4 +247,157 @@ public sealed class UpdateLedgerTests
         Assert.Equal(1, state.Attempts.DownloadFailures);
         Assert.Equal("0.5.0", state.Attempts.Version);
     }
+
+    [Fact]
+    public void 窓が明けたあとの取得の失敗は1から数える()
+    {
+        var state = new UpdateState();
+        for (var i = 0; i < 5; i++)
+        {
+            state = UpdateLedger.RecordDownloadFailure(state, "0.4.0", Sha, Now.AddMinutes(i));
+        }
+
+        state = UpdateLedger.RecordDownloadFailure(state, "0.4.0", Sha, Now.AddMinutes(4).AddHours(24));
+
+        Assert.Equal(1, state.Attempts.DownloadFailures);
+    }
+
+    // ---- 自動の遮断を解く
+
+    private static UpdateState FailedThree()
+    {
+        var state = new UpdateState();
+        foreach (var target in new[] { "0.4.0", "0.5.0", "0.6.0" })
+        {
+            (state, _) = UpdateLedger.Reconcile(
+                UpdateLedger.BeginInstall(state, target, Sha), V("0.3.0"), Now);
+        }
+
+        Assert.True(state.AutoUpdateDisabled);
+        return state;
+    }
+
+    [Fact]
+    public void 手で入れ直して成功すれば自動の遮断も解く()
+    {
+        // 案内どおりに入れ直しても解けないと、以後のどの版も自動では取らず、入れもしない
+        var state = UpdateLedger.AcknowledgeInterruption(FailedThree());
+
+        var (next, outcome) = UpdateLedger.Reconcile(
+            UpdateLedger.BeginInstall(state, "0.6.0", Sha), V("0.6.0"), Now);
+
+        Assert.Equal(InstallOutcome.Succeeded, outcome);
+        Assert.False(next.AutoUpdateDisabled);
+    }
+
+    [Fact]
+    public void 失敗した版をすべて追い越していれば失敗の記録を解く()
+    {
+        // Releasesから手で入れた場合は Installing を通らず、成功の枝に来ない
+        var state = UpdateLedger.ForgetOvertakenFailures(FailedThree(), V("0.6.0"));
+
+        Assert.False(state.AutoUpdateDisabled);
+        Assert.False(state.HasInterruptedInstall);
+        Assert.Empty(state.RecentFailedVersions);
+    }
+
+    [Fact]
+    public void 失敗した版より古ければ失敗の記録を残す()
+    {
+        var failed = FailedThree();
+
+        Assert.Same(failed, UpdateLedger.ForgetOvertakenFailures(failed, V("0.5.9")));
+    }
+
+    [Fact]
+    public void インストール中の状態には触れない()
+    {
+        // 成否は Reconcile が決める。先に解くと、失敗を数え損ねる
+        var installing = UpdateLedger.BeginInstall(FailedThree(), "0.7.0", Sha);
+
+        Assert.Same(installing, UpdateLedger.ForgetOvertakenFailures(installing, V("0.9.0")));
+    }
+
+    [Fact]
+    public void 失敗の記録が無ければ何もしない()
+    {
+        var state = new UpdateState { AutoUpdateDisabled = false };
+
+        Assert.Same(state, UpdateLedger.ForgetOvertakenFailures(state, V("9.9.9")));
+    }
+
+    // ---- 取得を終えたとき
+
+    [Fact]
+    public void 取得を終えたら取得の失敗を戻す()
+    {
+        // 残すと、時々の失敗が積もって上限に届く
+        var state = UpdateLedger.RecordDownloadFailure(new UpdateState(), "0.4.0", Sha, Now);
+        state = UpdateLedger.RecordDownloadFailure(state, "0.4.0", Sha, Now.AddMinutes(2));
+
+        state = UpdateLedger.RecordDownloaded(state);
+
+        Assert.Equal(UpdateStage.Downloaded, state.Stage);
+        Assert.Equal(0, state.Attempts.DownloadFailures);
+        Assert.Null(state.Attempts.LastDownloadFailureAt);
+        Assert.Equal("0.4.0", state.Attempts.Version);
+    }
+
+    [Fact]
+    public void 取得を終えてもインストールの失敗は残す()
+    {
+        var (failed, _) = UpdateLedger.Reconcile(Installing(), V("0.3.0"), Now);
+
+        var state = UpdateLedger.RecordDownloaded(failed);
+
+        Assert.Equal(1, state.Attempts.InstallFailures);
+        Assert.True(state.HasInterruptedInstall);
+    }
+
+    // ---- 更新を見つけたとき
+
+    [Fact]
+    public void 新しい狙いを見つけたら失敗の記録を張り直す()
+    {
+        var (failed, _) = UpdateLedger.Reconcile(Installing("0.4.0"), V("0.3.0"), Now);
+        failed = UpdateLedger.RecordDownloadFailure(failed, "0.4.0", Sha, Now);
+
+        var state = UpdateLedger.RecordAvailable(failed, "0.5.0", OtherSha);
+
+        Assert.Equal("0.5.0", state.Attempts.Version);
+        Assert.Equal(OtherSha, state.Attempts.ExpectedSha256);
+        Assert.Equal(0, state.Attempts.DownloadFailures);
+        Assert.Equal(0, state.Attempts.InstallFailures);
+
+        // 異なる版の失敗の連鎖は、狙いを張り直しても断たない。断つのは成功だけである
+        Assert.Equal(["0.4.0"], state.RecentFailedVersions);
+    }
+
+    [Fact]
+    public void 同じ狙いなら記録をそのまま残す()
+    {
+        var state = UpdateLedger.RecordDownloadFailure(new UpdateState(), "0.4.0", Sha, Now) with
+        {
+            PromptCount = 3,
+            LastPromptAt = Now,
+        };
+
+        Assert.Same(state, UpdateLedger.RecordAvailable(state, "0.4.0", Sha));
+    }
+
+    [Fact]
+    public void 狙いが変わったら割り込みの回数を戻し時刻は残す()
+    {
+        // 時刻まで消すと、版が出た日に2回割り込みうる
+        var state = UpdateLedger.RecordAvailable(new UpdateState(), "0.4.0", Sha) with
+        {
+            PromptCount = 5,
+            LastPromptAt = Now,
+        };
+
+        state = UpdateLedger.RecordAvailable(state, "0.5.0", Sha);
+
+        Assert.Equal(0, state.PromptCount);
+        Assert.Equal(Now, state.LastPromptAt);
+    }
 }

@@ -155,7 +155,13 @@ public static class ManifestVerifier
         }
 
         // ---- 3. 巻き戻しの検知
-        if (lastGeneratedAt is { } last && manifest.GeneratedAt <= last)
+        // 前回より「古い」ものだけを弾く。同じ時刻は古くない。
+        //
+        // 新しい版が出るまで、確認のたびに同じマニフェストが返る。
+        // 同じものまで弾くと、取得に1度失敗しただけで二度と取り直さなくなる。
+        // 署名は偽造できないため、同じものを出し直されても中身は変わらず害が無い。
+        // 巻き戻しとは、署名済みの古いマニフェストを出し直されることであり、それは下で止まる
+        if (lastGeneratedAt is { } last && manifest.GeneratedAt < last)
         {
             return ManifestVerification.Rejected(UpdateVerdict.Stale);
         }
@@ -254,6 +260,28 @@ public static class ManifestVerifier
         }
     }
 
+    /// <summary>
+    /// 配布物のURLから、置くときのファイル名を取り出す。
+    /// </summary>
+    /// <param name="package">配布物。</param>
+    /// <returns>URLのパスの最後の区切り。取り出せなければ空。</returns>
+    /// <remarks>
+    /// 検証と取得の両方がこれを使う。
+    /// 別々に取り出すと、検証で通した名前と置くときの名前が食い違いうる。
+    /// </remarks>
+    public static string PackageFileName(UpdatePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        if (!Uri.TryCreate(package.Url, UriKind.Absolute, out var uri))
+        {
+            return string.Empty;
+        }
+
+        var path = uri.AbsolutePath;
+        return path[(path.LastIndexOf('/') + 1)..];
+    }
+
     /// <summary>いまの版が、指定の版より古いか。</summary>
     /// <remarks>読めない値は「該当しない」として扱う。壊れた指定で機能を止めないためである。</remarks>
     private static bool IsBelow(SemanticVersion current, string? boundary) =>
@@ -270,6 +298,10 @@ public static class ManifestVerifier
     /// <para>
     /// SHA-256は64文字の16進でなければ、あとの照合が意味を持たない。
     /// 大きさが0以下のものも受け付けない。
+    /// </para>
+    /// <para>
+    /// URLから置くときの名前を取り出せないものも受け付けない。
+    /// 通してしまうと、取得の段で例外になり、確認のたびにアプリが落ちる。
     /// </para>
     /// </remarks>
     private static bool IsUsable(UpdatePackage package)
@@ -290,6 +322,7 @@ public static class ManifestVerifier
         }
 
         return uri.Scheme == Uri.UriSchemeHttps &&
-            string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase);
+            string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase) &&
+            UpdateDownloadStore.IsSafeFileName(PackageFileName(package));
     }
 }
