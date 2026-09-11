@@ -1,19 +1,27 @@
 using System.Globalization;
 using System.Windows;
 using FursuitWeather.Core.Api;
+using FursuitWeather.Core.Time;
+using FursuitWeather.Core.Update;
 using FursuitWeather.Widget.Services;
 
 namespace FursuitWeather.Widget.Views;
 
 /// <summary>設定の画面。</summary>
 /// <remarks>
+/// <para>
 /// いま実際に効く項目だけを置く。
-/// 更新の3モードや先読みの幅は、対応する仕組みを繋いだときに足す。
 /// 動かない飾りのコントロールを置くと、設定したのに効かないという誤解を生む。
+/// </para>
+/// <para>
+/// 設計にある「計測中はインストールしない」は置かない。
+/// 計測の機能がまだ無く、効かない飾りになるためである。
+/// </para>
 /// </remarks>
 public partial class SettingsWindow : Window
 {
     private readonly WidgetSettings _original;
+    private readonly UpdateService? _updates;
 
     /// <summary>保存されたあとの設定。「やめる」で閉じたときは null。</summary>
     public WidgetSettings? Result { get; private set; }
@@ -21,12 +29,17 @@ public partial class SettingsWindow : Window
     /// <summary>設定の画面を作る。</summary>
     /// <param name="settings">いまの設定。</param>
     /// <param name="notificationState">通知の状態を表す文。</param>
-    public SettingsWindow(WidgetSettings settings, string notificationState)
+    /// <param name="updates">更新の仕組み。動いていなければ null で、更新の項目を出さない。</param>
+    public SettingsWindow(WidgetSettings settings, string notificationState, UpdateService? updates)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         InitializeComponent();
         _original = settings;
+        _updates = updates;
+
+        // 768pxの画面でも保存を押せるよう、高さを作業領域に収める。はみ出た分は中身がスクロールする
+        MaxHeight = Math.Max(360, SystemParameters.WorkArea.Height - 40);
 
         LatitudeBox.Text = settings.Latitude.ToString("0.####", CultureInfo.InvariantCulture);
         LongitudeBox.Text = settings.Longitude.ToString("0.####", CultureInfo.InvariantCulture);
@@ -49,6 +62,72 @@ public partial class SettingsWindow : Window
             StartupStateText.Text = "Windowsの側で無効にされています。ここで入れ直すと有効に戻ります。";
             StartupStateText.Visibility = Visibility.Visible;
         }
+
+        if (_updates is null)
+        {
+            UpdateSection.Visibility = Visibility.Collapsed;
+            UpdateStatusPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var update = _updates.State;
+        UpdateAutomaticRadio.IsChecked = update.Mode == UpdateMode.Automatic;
+        UpdateDownloadOnlyRadio.IsChecked = update.Mode == UpdateMode.DownloadOnly;
+        UpdateNotifyOnlyRadio.IsChecked = update.Mode == UpdateMode.NotifyOnly;
+        PauseOnMeteredCheck.IsChecked = update.PauseOnMetered;
+        PauseOnBatteryCheck.IsChecked = update.PauseOnBattery;
+
+        // 開いているあいだに確認や取得が進んだら、その場で書き換える
+        _updates.Changed += OnUpdatesChanged;
+        Closed += (_, _) => _updates.Changed -= OnUpdatesChanged;
+        RefreshUpdateStatus();
+    }
+
+    private void OnUpdatesChanged(object? sender, EventArgs e) => RefreshUpdateStatus();
+
+    /// <summary>更新の状態を画面へ書く。</summary>
+    private void RefreshUpdateStatus()
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        var state = _updates.State;
+        RunningVersionText.Text = string.Create(CultureInfo.InvariantCulture, $"いまの版: {_updates.Running}");
+        LastCheckedText.Text = state.LastCheckedAt is { } at
+            ? string.Create(CultureInfo.InvariantCulture, $"最後に確認した日時: {JstTime.ToLocal(at):yyyy-MM-dd HH:mm}")
+            : "最後に確認した日時: まだ確認していません";
+
+        // 取得を終えていれば、入れる場所まで案内する。設定画面からは入れない
+        UpdateStatusText.Text = _updates.HasDownloadedUpdate
+            ? string.Create(CultureInfo.InvariantCulture, $"{_updates.LastMessage}。トレイの「更新をインストール」から入れられます")
+            : _updates.LastMessage;
+
+        AutoDisabledText.Visibility = state.AutoUpdateDisabled ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnCheckUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        CheckUpdateButton.IsEnabled = false;
+        UpdateStatusText.Text = "確認しています…";
+        try
+        {
+            // トレイの「更新を確認」と同じ流れを通る。保留なら大きさと理由を見せて尋ねる
+            await _updates.CheckThenOfferDownloadAsync(
+                question => MessageBox.Show(this, question, "FursuitWeather", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                .ConfigureAwait(true);
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
+            RefreshUpdateStatus();
+        }
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
@@ -69,6 +148,15 @@ public partial class SettingsWindow : Window
         if (place.Length > 40)
         {
             ShowError("表示名は40文字までにしてください。");
+            return;
+        }
+
+        // 更新の扱いを先に当てる。保存できなければ閉じない。
+        // 閉じてしまうと、変えられなかったことが利用者に伝わらない
+        if (_updates is not null &&
+            !_updates.ApplyPreferences(ReadUpdateMode(), PauseOnMeteredCheck.IsChecked == true, PauseOnBatteryCheck.IsChecked == true))
+        {
+            ShowError("更新の扱いを保存できませんでした。ファイルを書き込めない状態の可能性があります。");
             return;
         }
 
@@ -114,6 +202,16 @@ public partial class SettingsWindow : Window
     {
         ErrorText.Text = message;
         ErrorText.Visibility = Visibility.Visible;
+    }
+
+    private UpdateMode ReadUpdateMode()
+    {
+        if (UpdateAutomaticRadio.IsChecked == true)
+        {
+            return UpdateMode.Automatic;
+        }
+
+        return UpdateNotifyOnlyRadio.IsChecked == true ? UpdateMode.NotifyOnly : UpdateMode.DownloadOnly;
     }
 
     private WindowLayer ReadLayer()

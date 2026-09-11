@@ -311,28 +311,10 @@ public partial class WidgetWindow : Window, IDisposable
             return;
         }
 
-        await _updates.CheckNowAsync().ConfigureAwait(true);
-
-        // 取得のゲートで止まっていたら、理由と大きさを見せてから尋ねる。
-        // 押されたのは「確認」であり、取得への同意ではない。
-        // 従量制課金の回線で、黙って200MB近くを落とさない
-        if (!_updates.HasDownloadedUpdate &&
-            _updates.AvailableVersion is { } version &&
-            _updates.AvailableSize is { } size &&
-            _updates.State.Stage is Core.Update.UpdateStage.DownloadHeld
-                or Core.Update.UpdateStage.UpdateAvailable
-                or Core.Update.UpdateStage.DownloadPaused)
-        {
-            var question = string.Create(
-                CultureInfo.InvariantCulture,
-                $"{version} が出ています（約{size / 1024d / 1024d:F0}MB）。\n{_updates.LastMessage}\n\n今すぐ取得しますか？");
-            if (ShowDialog(question, MessageBoxImage.Question, MessageBoxButton.YesNo) != MessageBoxResult.Yes)
-            {
-                return;
-            }
-
-            await _updates.DownloadNowAsync().ConfigureAwait(true);
-        }
+        // 取得のゲートで止まっていたら、理由と大きさを見せてから尋ねる
+        await _updates.CheckThenOfferDownloadAsync(
+            question => ShowDialog(question, MessageBoxImage.Question, MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            .ConfigureAwait(true);
 
         ShowDialog(_updates.LastMessage, MessageBoxImage.Information);
     }
@@ -513,7 +495,7 @@ public partial class WidgetWindow : Window, IDisposable
             ? _toast.DescribeSetting()
             : "この設定で切っています";
 
-        _settingsWindow = new SettingsWindow(_settings, state)
+        _settingsWindow = new SettingsWindow(_settings, state, _updates)
         {
             Owner = IsVisible ? this : null,
         };
