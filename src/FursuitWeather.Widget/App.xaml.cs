@@ -67,6 +67,13 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
+    /// <inheritdoc />
+    protected override void OnExit(ExitEventArgs e)
+    {
+        ReleaseSingleInstance();
+        base.OnExit(e);
+    }
+
     /// <summary>
     /// このセッションで1つ目の起動かを確かめ、そうなら2つ目からの合図を待ち受ける。
     /// </summary>
@@ -114,6 +121,43 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// 終えると決めたところで、1つ目の座を明け渡す。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ミューテックスは、明け渡さないとプロセスが消えるまで持ち主のまま残る。
+    /// 終わりかけのあいだに起動した2つ目は「もう動いている」と見て黙って終わり、
+    /// 最後に何も動いていない状態になる。
+    /// クラッシュの画面を出して OK を待っているあいだが、いちばん長い。
+    /// </para>
+    /// <para>
+    /// 持ち主の UI スレッドから呼ぶこと。ほかのスレッドからは明け渡せない。
+    /// </para>
+    /// </remarks>
+    private static void ReleaseSingleInstance()
+    {
+        _revealWait?.Unregister(null);
+        _revealWait = null;
+
+        if (_instance is not { } instance)
+        {
+            return;
+        }
+
+        _instance = null;
+        try
+        {
+            instance.ReleaseMutex();
+        }
+        catch (ApplicationException)
+        {
+            // 持っていなかった。明け渡すものが無い
+        }
+
+        instance.Dispose();
+    }
+
+    /// <summary>
     /// 拾えなかった例外を、利用者と記録の両方へ残してから終わる。
     /// </summary>
     /// <param name="sender">送り主。</param>
@@ -133,6 +177,9 @@ public partial class App : Application
         ArgumentNullException.ThrowIfNull(e);
 
         var path = Path.Combine(WidgetSettings.Directory, "crash.txt");
+
+        // 画面で OK を待つあいだに起動し直されても、そちらが1つ目として動けるようにする
+        Safely(ReleaseSingleInstance);
 
         Safely(() =>
         {

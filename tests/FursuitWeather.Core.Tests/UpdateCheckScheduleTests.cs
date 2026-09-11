@@ -345,6 +345,40 @@ public sealed class UpdateCheckScheduleTests
     }
 
     [Fact]
+    public void 答えの無かった確認のあとは待ちが明けるまで待つ()
+    {
+        var lastTick = TimeSpan.FromMinutes(10);
+
+        Assert.True(UpdateCheckSchedule.IsWaitingAfterUnanswered(
+            1, Now, lastTick, Now.AddMinutes(4), lastTick + TimeSpan.FromMinutes(4)));
+        Assert.False(UpdateCheckSchedule.IsWaitingAfterUnanswered(
+            1, Now, lastTick, Now.AddMinutes(5), lastTick + TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
+    public void 時計が戻っても単調時刻で待ちを終える()
+    {
+        // 壁時計だけで決めると、戻った幅だけ試し直しが止まる
+        var lastTick = TimeSpan.FromMinutes(10);
+
+        Assert.False(UpdateCheckSchedule.IsWaitingAfterUnanswered(
+            1, Now, lastTick, Now.AddHours(-3), lastTick + TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact]
+    public void 再起動で単調時刻が戻っても壁時計で待ちを終える()
+    {
+        Assert.False(UpdateCheckSchedule.IsWaitingAfterUnanswered(
+            1, Now, TimeSpan.FromHours(5), Now.AddMinutes(5), TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public void 答えの無かった確認が無ければ待たない()
+    {
+        Assert.False(UpdateCheckSchedule.IsWaitingAfterUnanswered(0, null, null, Now, TimeSpan.Zero));
+    }
+
+    [Fact]
     public void 途中の確認は答えを得たら終える()
     {
         var due = UpdateCheckSchedule.IsDue(

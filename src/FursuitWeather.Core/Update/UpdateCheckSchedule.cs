@@ -169,6 +169,36 @@ public static class UpdateCheckSchedule
             : UnansweredRetryDelays[Math.Min(failures - 1, UnansweredRetryDelays.Count - 1)];
 
     /// <summary>
+    /// 確かな答えを得られなかった確認のあと、まだ待つべきか。
+    /// </summary>
+    /// <param name="failures">続けて答えを得られなかった回数。</param>
+    /// <param name="lastWallClock">最後に答えを得られなかった壁時計の時刻。無ければ null。</param>
+    /// <param name="lastMonotonic">同じときの単調時刻。無ければ null。</param>
+    /// <param name="wallClock">いまの壁時計。</param>
+    /// <param name="monotonic">いまの単調時刻。</param>
+    /// <returns>待つべきなら true。</returns>
+    /// <remarks>
+    /// 壁時計と単調時刻のどちらかが待ちを越えたら、待ちを終える。
+    /// 壁時計だけで決めると、時計が戻った幅だけ試し直しが止まる。
+    /// 周期の判定（<see cref="IsDue"/>）と同じ考え方である。
+    /// </remarks>
+    public static bool IsWaitingAfterUnanswered(
+        int failures,
+        DateTimeOffset? lastWallClock,
+        TimeSpan? lastMonotonic,
+        DateTimeOffset wallClock,
+        TimeSpan monotonic)
+    {
+        if (lastWallClock is not { } lastWall || lastMonotonic is not { } lastTick)
+        {
+            return false;
+        }
+
+        var delay = UnansweredRetryDelay(failures);
+        return wallClock - lastWall < delay && monotonic - lastTick < delay;
+    }
+
+    /// <summary>
     /// 更新が途中の状態か。
     /// </summary>
     /// <param name="stage">保存してあった進み具合。</param>

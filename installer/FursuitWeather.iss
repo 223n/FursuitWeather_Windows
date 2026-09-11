@@ -84,21 +84,27 @@ LicenseFile={#SourcePath}\..\LICENSE
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [Files]
-; self-contained の発行結果をまるごと置く。
+; 並べ方に意味がある。上から順に置かれる。
 ;
-; 版を読む FursuitWeather.Widget.dll は最後に置く。
+; 版を読む FursuitWeather.Widget.dll を、ファイルの中で最後に置く。
 ; 置き換えの途中で止まると、Inno の巻き戻しは前からあったファイルを戻さない。
 ; 版を持つファイルが先に新しくなると、次の起動で版を照らしたときに「入った」と誤って判定する。
 ; 名前順に置かれるため、何もしないと Widget.dll は305個のうち18番目に来る。
-; 版が切り替わるのを、ほかのすべてが揃ったあとにする
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "\FursuitWeather.*"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#PublishDir}\FursuitWeather.*"; DestDir: "{app}"; Excludes: "\FursuitWeather.Widget.dll"; Flags: ignoreversion
-Source: "{#PublishDir}\FursuitWeather.Widget.dll"; DestDir: "{app}"; Flags: ignoreversion
+;
+; ランタイムのインストーラーはいちばん先に置く。
+; 111MB あり、正味でいちばん容量を使う書き込みである。
+; あとに回すと、空きの少ない端末では Widget.dll まで置き終えてから容量が尽き、
+; 中止したのに版だけが新しい状態になる
 
 #ifdef RuntimeInstaller
 ; Windows App SDK のランタイム。入れ終わったら消す
 Source: "{#RuntimeInstaller}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 #endif
+
+; self-contained の発行結果をまるごと置く。版が切り替わるのを最後にするため3行に分ける
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "\FursuitWeather.*"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDir}\FursuitWeather.*"; DestDir: "{app}"; Excludes: "\FursuitWeather.Widget.dll"; Flags: ignoreversion
+Source: "{#PublishDir}\FursuitWeather.Widget.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
@@ -382,11 +388,24 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  RuntimeOk: Boolean;
 begin
   if CurStep <> ssPostInstall then
     Exit;
 
-  if not InstallRuntime() then
+  RuntimeOk := InstallRuntime();
+
+  { 更新から呼ばれたときは、ランタイムを入れ終えてから起動し直す。
+    Run セクションの行はここより前に走るため、ランタイムの版を上げた更新で起動に失敗する。
+
+    下の MsgBox より先に行う。MsgBox は /SUPPRESSMSGBOXES でも抑止されず、
+    誰かが OK を押すまで戻らない。その間、起動し直しも止まる。
+    入っているランタイムで動ける場合もあるため、失敗しても起動は試す }
+  if ShouldRelaunch() then
+    Relaunch('インストールとランタイムの導入を終えた');
+
+  if not RuntimeOk then
   begin
     { 止めないが、実態どおりに伝える。
       ブートストラッパーが ModuleInitializer から走るため、
@@ -401,9 +420,4 @@ begin
       '詳しい経緯はインストールのログに残っています。',
       mbError, MB_OK);
   end;
-
-  { 更新から呼ばれたときは、ランタイムを入れ終えてから起動し直す。
-    Run セクションの行はここより前に走るため、ランタイムの版を上げた更新で起動に失敗する }
-  if ShouldRelaunch() then
-    Relaunch('インストールとランタイムの導入を終えた');
 end;

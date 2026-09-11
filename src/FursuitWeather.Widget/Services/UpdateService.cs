@@ -63,6 +63,7 @@ public sealed class UpdateService : IDisposable
     private bool _answeredThisSession;
     private int _unansweredChecks;
     private DateTimeOffset? _lastUnansweredAt;
+    private TimeSpan? _lastUnansweredMonotonic;
     private bool _autoInstallAttempted;
 
     /// <summary>状態が変わったときに起きる。</summary>
@@ -246,15 +247,20 @@ public sealed class UpdateService : IDisposable
         }
 
         var now = DateTimeOffset.UtcNow;
+        var monotonic = TimeSpan.FromMilliseconds(Environment.TickCount64);
 
         // 確かな答えを得られなかった確認のあとは、間を空けてから試し直す。毎分は叩かない
-        var waiting = _lastUnansweredAt is { } at &&
-            now < at + UpdateCheckSchedule.UnansweredRetryDelay(_unansweredChecks);
+        var waiting = UpdateCheckSchedule.IsWaitingAfterUnanswered(
+            _unansweredChecks,
+            _lastUnansweredAt,
+            _lastUnansweredMonotonic,
+            now,
+            monotonic);
 
         var due = UpdateCheckSchedule.IsDue(
             _state,
             now,
-            TimeSpan.FromMilliseconds(Environment.TickCount64),
+            monotonic,
             UpdateEnvironment.Read(0).Uptime,
             _phase,
             answeredThisSession: _answeredThisSession || waiting);
@@ -381,7 +387,7 @@ public sealed class UpdateService : IDisposable
             {
                 // タイムアウトは TaskCanceledException だけとは限らない。
                 // 書き込みの待ちの最中に切れると、基底の OperationCanceledException のまま来る
-                MarkUnanswered(wall);
+                MarkUnanswered(wall, monotonic);
                 Finish(wall, monotonic, accepted: null, before, "確認できませんでした。回線の状態を確かめてください");
                 return;
             }
@@ -400,7 +406,7 @@ public sealed class UpdateService : IDisposable
             {
                 // 誰が作ったか分からない応答で、前に検証を通したものを捨てない。
                 // 公衆Wi-Fiの認証ページや一時の不具合でも起きる。答えを得られなかったものとして扱う
-                MarkUnanswered(wall);
+                MarkUnanswered(wall, monotonic);
                 Finish(wall, monotonic, accepted: null, before, Describe(result));
                 return;
             }
@@ -771,13 +777,15 @@ public sealed class UpdateService : IDisposable
         _answeredThisSession = true;
         _unansweredChecks = 0;
         _lastUnansweredAt = null;
+        _lastUnansweredMonotonic = null;
     }
 
     /// <summary>答えを得られなかった。間を空けて確かめ直す。</summary>
-    private void MarkUnanswered(DateTimeOffset at)
+    private void MarkUnanswered(DateTimeOffset wallClock, TimeSpan monotonic)
     {
         _unansweredChecks++;
-        _lastUnansweredAt = at;
+        _lastUnansweredAt = wallClock;
+        _lastUnansweredMonotonic = monotonic;
     }
 
     /// <summary>自動のインストールを見送ったことと、その理由を残す。</summary>
