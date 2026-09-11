@@ -52,6 +52,11 @@
                     <Separator />
                     <Separator />
                     <MenuItem Header="設定" Click="OnOpenSettings" />
+                    <MenuItem Header="更新を確認" Click="OnCheckUpdate" />
+                    <MenuItem x:Name="InstallUpdateItem"
+                              Header="更新をインストール"
+                              IsEnabled="False"
+                              Click="OnInstallUpdate" />
                     <MenuItem Header="通知を試す" Click="OnTestNotification" />
                     <MenuItem Header="いまの予報で通知を組み立てる" Click="OnPreviewNotification" />
                     <MenuItem Header="検証に使う情報を見る" Click="OnShowDiagnostics" />

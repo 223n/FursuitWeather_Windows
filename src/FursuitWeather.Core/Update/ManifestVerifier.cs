@@ -155,7 +155,13 @@ public static class ManifestVerifier
         }
 
         // ---- 3. 巻き戻しの検知
-        if (lastGeneratedAt is { } last && manifest.GeneratedAt <= last)
+        // 前回より「古い」ものだけを弾く。同じ時刻は古くない。
+        //
+        // 新しい版が出るまで、確認のたびに同じマニフェストが返る。
+        // 同じものまで弾くと、取得に1度失敗しただけで二度と取り直さなくなる。
+        // 署名は偽造できないため、同じものを出し直されても中身は変わらず害が無い。
+        // 巻き戻しとは、署名済みの古いマニフェストを出し直されることであり、それは下で止まる
+        if (lastGeneratedAt is { } last && manifest.GeneratedAt < last)
         {
             return ManifestVerification.Rejected(UpdateVerdict.Stale);
         }
