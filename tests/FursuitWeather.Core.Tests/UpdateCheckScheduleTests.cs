@@ -312,7 +312,7 @@ public sealed class UpdateCheckScheduleTests
             TimeSpan.FromMinutes(20),
             TimeSpan.FromMinutes(20),
             0.5d,
-            checkedThisSession: false);
+            answeredThisSession: false);
 
         Assert.True(due);
     }
@@ -326,13 +326,26 @@ public sealed class UpdateCheckScheduleTests
             TimeSpan.FromMinutes(1),
             TimeSpan.FromMinutes(1),
             0.5d,
-            checkedThisSession: false);
+            answeredThisSession: false);
 
         Assert.False(due);
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 5)]
+    [InlineData(2, 15)]
+    [InlineData(3, 60)]
+    [InlineData(9, 60)]
+    public void 答えを得られなかった確認は間を空けて試し直す(int failures, int expectedMinutes)
+    {
+        // 待たずに試すと、回線が切れているあいだ毎分叩き続ける。
+        // 使い切りにすると、起動した直後の1回の失敗で途中の更新が翌日まで止まる
+        Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), UpdateCheckSchedule.UnansweredRetryDelay(failures));
+    }
+
     [Fact]
-    public void 途中の確認はプロセスごとに1回だけ()
+    public void 途中の確認は答えを得たら終える()
     {
         var due = UpdateCheckSchedule.IsDue(
             CheckedBeforeReboot(UpdateStage.DownloadHeld),
@@ -340,7 +353,7 @@ public sealed class UpdateCheckScheduleTests
             TimeSpan.FromMinutes(20),
             TimeSpan.FromMinutes(20),
             0.5d,
-            checkedThisSession: true);
+            answeredThisSession: true);
 
         Assert.False(due);
     }
@@ -356,7 +369,7 @@ public sealed class UpdateCheckScheduleTests
             TimeSpan.FromMinutes(20),
             TimeSpan.FromMinutes(20),
             0.5d,
-            checkedThisSession: false);
+            answeredThisSession: false);
 
         Assert.False(due);
     }

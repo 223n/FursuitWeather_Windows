@@ -57,10 +57,12 @@ public sealed class UpdateService : IDisposable
     private UpdateState _state;
     private ManifestVerification? _available;
     private DownloadedUpdate? _download;
-    private string? _pendingNotice;
+    private bool _noticePending;
     private bool _busy;
     private bool _disposed;
-    private bool _checkedThisSession;
+    private bool _answeredThisSession;
+    private int _unansweredChecks;
+    private DateTimeOffset? _lastUnansweredAt;
     private bool _autoInstallAttempted;
 
     /// <summary>状態が変わったときに起きる。</summary>
@@ -122,8 +124,19 @@ public sealed class UpdateService : IDisposable
                 return "更新: 前回のインストールが途中で終わりました";
             }
 
-            return _available?.Version is { } version && UpdateCheckSchedule.IsPending(_state.Stage)
-                ? string.Create(CultureInfo.InvariantCulture, $"更新: {version} が出ています")
+            if (_available?.Version is { } version && UpdateCheckSchedule.IsPending(_state.Stage))
+            {
+                return string.Create(CultureInfo.InvariantCulture, $"更新: {version} が出ています");
+            }
+
+            // 途中のまま起動し、まだ確かめ直せていない。
+            // 見つけた更新はメモリにしか持たないため、確かめ直すまで版を出せない
+            return _state.Stage is UpdateStage.UpdateAvailable
+                or UpdateStage.DownloadHeld
+                or UpdateStage.DownloadPaused
+                or UpdateStage.Downloaded
+                or UpdateStage.InstallHeld
+                ? "更新: 途中の更新を確かめ直しています"
                 : null;
         }
     }
@@ -156,17 +169,23 @@ public sealed class UpdateService : IDisposable
     /// </summary>
     /// <returns>確定した結論。</returns>
     /// <remarks>
-    /// 本体を起動し直すのはインストーラーの <c>[Run]</c> である。
+    /// 本体を起動し直すのはインストーラーである（ランタイムを入れたあとの <c>ssPostInstall</c> か、中止したときの <c>DeinitializeSetup</c>）。
     /// ここで狙った版と照らし、成功か中断かを決める。
     /// </remarks>
     public InstallOutcome ReconcileAtStartup()
     {
         var (next, outcome) = UpdateLedger.Reconcile(_state, Running, DateTimeOffset.UtcNow);
+
+        // Releasesから手で入れて失敗の版を追い越していれば、自動の遮断も解く
+        var forgotten = UpdateLedger.ForgetOvertakenFailures(next, Running);
+        if (!ReferenceEquals(forgotten, _state))
+        {
+            _state = forgotten;
+            UpdateStateStore.Save(_state);
+        }
+
         if (outcome != InstallOutcome.None)
         {
-            _state = next;
-            UpdateStateStore.Save(_state);
-
             LastMessage = outcome == InstallOutcome.Succeeded
                 ? string.Create(CultureInfo.InvariantCulture, $"{Running} に更新しました")
                 : "前回のインストールが途中で終わりました。次は確認してから実行します";
@@ -226,13 +245,19 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
+        var now = DateTimeOffset.UtcNow;
+
+        // 確かな答えを得られなかった確認のあとは、間を空けてから試し直す。毎分は叩かない
+        var waiting = _lastUnansweredAt is { } at &&
+            now < at + UpdateCheckSchedule.UnansweredRetryDelay(_unansweredChecks);
+
         var due = UpdateCheckSchedule.IsDue(
             _state,
-            DateTimeOffset.UtcNow,
+            now,
             TimeSpan.FromMilliseconds(Environment.TickCount64),
             UpdateEnvironment.Read(0).Uptime,
             _phase,
-            checkedThisSession: _checkedThisSession);
+            answeredThisSession: _answeredThisSession || waiting);
 
         if (due)
         {
@@ -245,9 +270,9 @@ public sealed class UpdateService : IDisposable
 
         // 時間帯の外などで割り込まなかった知らせを、出せるときが来たら出す。
         // 出すかどうかは受け取った側が決める。出さなければ残り、次の tick でまた渡す
-        if (_pendingNotice is { } message && !_disposed)
+        if (_noticePending && !_disposed)
         {
-            Notice?.Invoke(this, message);
+            RaiseNotice();
         }
     }
 
@@ -327,7 +352,6 @@ public sealed class UpdateService : IDisposable
         }
 
         _busy = true;
-        _checkedThisSession = true;
         try
         {
             // 確かめられなかったときは、前の状態を変えない
@@ -349,6 +373,7 @@ public sealed class UpdateService : IDisposable
             {
                 // 安定版がまだ1つも出ていない。更新は無いものとして扱う。
                 // 失敗として数えると、正式版を出すまで警告が出続ける
+                MarkAnswered();
                 Finish(wall, monotonic, accepted: null, UpdateStage.Idle, "公開されている安定版はまだありません");
                 return;
             }
@@ -356,6 +381,7 @@ public sealed class UpdateService : IDisposable
             {
                 // タイムアウトは TaskCanceledException だけとは限らない。
                 // 書き込みの待ちの最中に切れると、基底の OperationCanceledException のまま来る
+                MarkUnanswered(wall);
                 Finish(wall, monotonic, accepted: null, before, "確認できませんでした。回線の状態を確かめてください");
                 return;
             }
@@ -370,6 +396,17 @@ public sealed class UpdateService : IDisposable
                 Environment.OSVersion.Version.Build,
                 ProcessArch());
 
+            if (result.Verdict == UpdateVerdict.SignatureInvalid)
+            {
+                // 誰が作ったか分からない応答で、前に検証を通したものを捨てない。
+                // 公衆Wi-Fiの認証ページや一時の不具合でも起きる。答えを得られなかったものとして扱う
+                MarkUnanswered(wall);
+                Finish(wall, monotonic, accepted: null, before, Describe(result));
+                return;
+            }
+
+            MarkAnswered();
+
             if (result.Verdict == UpdateVerdict.NotNewer)
             {
                 // いまの版が追いついた。Releasesから手で入れた場合もここへ来る。
@@ -377,16 +414,23 @@ public sealed class UpdateService : IDisposable
                 DropDownload();
                 _store.CleanExcept(null);
                 _available = null;
-                _pendingNotice = null;
+                _noticePending = false;
                 Finish(wall, monotonic, result.Manifest?.GeneratedAt, UpdateStage.Idle, Describe(result));
                 return;
             }
 
             if (!result.HasUpdate || result.Version is not { } version || result.Package is not { } package)
             {
-                // 通らなかった確認では、前に検証を通したものを捨てない。
-                // 一時の不具合で、取ってあった更新を失わないようにする
-                Finish(wall, monotonic, result.Manifest?.GeneratedAt, before, Describe(result));
+                // 署名を通ったマニフェストが、見つけてあった更新を否定した。
+                // リリースを取り下げたとき（古いマニフェストが返る）もここへ来る。
+                // 進めるのをやめる。前の答えを信じて取りに行くと、取り下げた版を入れてしまう。
+                //
+                // 置き場のファイルは消さない。一時の食い違いで同じ版がまた返れば、照らしてから使い回す。
+                // 途中の状態でなくなるため、次の起動で片付く
+                DropDownload();
+                _available = null;
+                _noticePending = false;
+                Finish(wall, monotonic, result.Manifest?.GeneratedAt, UpdateStage.Idle, Describe(result));
                 return;
             }
 
@@ -403,9 +447,13 @@ public sealed class UpdateService : IDisposable
             if (_download is not null)
             {
                 // もう手元にある。同じものを取り直さない
-                var ready = string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができています");
-                Finish(wall, monotonic, result.Manifest?.GeneratedAt, UpdateStage.Downloaded, ready);
-                SetNotice(ready);
+                Finish(
+                    wall,
+                    monotonic,
+                    result.Manifest?.GeneratedAt,
+                    UpdateStage.Downloaded,
+                    string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができています"));
+                SetNotice();
                 return;
             }
 
@@ -456,6 +504,9 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
+        // 狙いの違うものは抱えない
+        DropDownload();
+
         var fileName = ManifestVerifier.PackageFileName(package);
 
         // 通信しないので、取得のゲートより先に見る。
@@ -466,6 +517,11 @@ public sealed class UpdateService : IDisposable
             Adopt(reused, version, package, manual);
             return;
         }
+
+        // 置き場に、いまの狙いに使えるものは無い。見送る場合もここで片付ける。
+        // 見送りの前に消さないと、手放した旧版の実体が保留のあいだ残り続ける。
+        // 途中で終わった取得の残りもここで消える
+        _store.CleanExcept(null);
 
         if (!manual)
         {
@@ -479,15 +535,12 @@ public sealed class UpdateService : IDisposable
                 Save(gate.Outcome == GateOutcome.Hold
                     ? UpdateGate.Describe(gate.Reason)
                     : string.Create(CultureInfo.InvariantCulture, $"{version} が出ています。取得は押したときだけ行います"));
-                SetNotice(string.Create(CultureInfo.InvariantCulture, $"新しい版 {version} が出ています"));
+                SetNotice();
                 return;
             }
         }
 
         SetStage(UpdateStage.Downloading, string.Create(CultureInfo.InvariantCulture, $"{version} を取得しています"));
-
-        // 狙いの違うものは使わない。途中で終わった取得の残りもここで消える
-        _store.CleanExcept(null);
 
         UpdateDownload? download = null;
         try
@@ -537,9 +590,8 @@ public sealed class UpdateService : IDisposable
         _store.CleanExcept(file.Id);
 
         _state = UpdateLedger.RecordDownloaded(_state);
-        var message = string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができました");
-        Save(message);
-        SetNotice(message);
+        Save(string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができました"));
+        SetNotice();
 
         if (!manual && _state.Mode == UpdateMode.Automatic)
         {
@@ -628,7 +680,7 @@ public sealed class UpdateService : IDisposable
                 UseShellExecute = false,
                 WorkingDirectory = download.File.Directory,
             });
-            _pendingNotice = null;
+            _noticePending = false;
             return null;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or FileNotFoundException)
@@ -658,7 +710,7 @@ public sealed class UpdateService : IDisposable
     /// <remarks>割り込んだ回数だけを数える。トレイに出しただけのものは数えない。</remarks>
     public void RecordPrompt()
     {
-        _pendingNotice = null;
+        _noticePending = false;
         _state = UpdatePrompt.RecordToast(_state, DateTimeOffset.UtcNow);
         UpdateStateStore.Save(_state);
     }
@@ -682,10 +734,50 @@ public sealed class UpdateService : IDisposable
     /// 割り込むかは受け取った側が <see cref="DecidePrompt"/> で決める。
     /// 割り込んだら <see cref="RecordPrompt"/> が消す。割り込まなければ、tick のたびに渡し直す。
     /// </remarks>
-    private void SetNotice(string message)
+    private void SetNotice()
     {
-        _pendingNotice = message;
+        _noticePending = true;
+        RaiseNotice();
+    }
+
+    /// <summary>
+    /// いまの状態から文面を組み立てて渡す。
+    /// </summary>
+    /// <remarks>
+    /// 文面は持ち越さない。渡す直前に組み立てる。
+    /// 持ち越すと、狙いが変わったあとに手放した版の「準備ができています」を出す。
+    /// </remarks>
+    private void RaiseNotice()
+    {
+        var message = _download is not null
+            ? string.Create(CultureInfo.InvariantCulture, $"{_download.Version} の準備ができています")
+            : _available?.Version is { } version
+                ? string.Create(CultureInfo.InvariantCulture, $"新しい版 {version} が出ています")
+                : null;
+
+        if (message is null)
+        {
+            // 知らせることが無くなった
+            _noticePending = false;
+            return;
+        }
+
         Notice?.Invoke(this, message);
+    }
+
+    /// <summary>確かな答えを得た。途中の更新の確かめ直しを終える。</summary>
+    private void MarkAnswered()
+    {
+        _answeredThisSession = true;
+        _unansweredChecks = 0;
+        _lastUnansweredAt = null;
+    }
+
+    /// <summary>答えを得られなかった。間を空けて確かめ直す。</summary>
+    private void MarkUnanswered(DateTimeOffset at)
+    {
+        _unansweredChecks++;
+        _lastUnansweredAt = at;
     }
 
     /// <summary>自動のインストールを見送ったことと、その理由を残す。</summary>

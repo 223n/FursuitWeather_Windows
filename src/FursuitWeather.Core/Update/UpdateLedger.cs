@@ -97,12 +97,15 @@ public static class UpdateLedger
         if (running >= target)
         {
             // 成功は「続けて失敗した版」の連鎖を断つ。
-            // 途中で1つ入れば、次の版の失敗を3つ目として数えない
+            // 途中で1つ入れば、次の版の失敗を3つ目として数えない。
+            // 自動の遮断も解く。案内どおりに手で入れ直して成功しても解けないと、
+            // 以後のどの版も自動では取らず、入れもしない
             return (
                 ClearTarget(state) with
                 {
                     Stage = UpdateStage.Succeeded,
                     HasInterruptedInstall = false,
+                    AutoUpdateDisabled = false,
                     Attempts = new UpdateAttempts(),
                     RecentFailedVersions = [],
                 },
@@ -131,6 +134,48 @@ public static class UpdateLedger
                 AutoUpdateDisabled = state.AutoUpdateDisabled || UpdateRetryPolicy.ShouldDisableAuto(failed),
             },
             InstallOutcome.Failed);
+    }
+
+    /// <summary>
+    /// いま動いている版が失敗した版をすべて追い越していれば、失敗の記録を解く。
+    /// </summary>
+    /// <param name="state">いまの状態。</param>
+    /// <param name="running">いま動いている版。</param>
+    /// <returns>書き入れたあとの状態。解くものが無ければ同じもの。</returns>
+    /// <remarks>
+    /// <para>
+    /// Releasesのページから手で入れた場合は <see cref="UpdateStage.Installing"/> を通らない。
+    /// そのため <see cref="Reconcile"/> の成功の枝に来ず、自動の遮断が残り続ける。
+    /// 失敗した版より新しい版で動いているなら、その失敗はもう意味を持たない。
+    /// </para>
+    /// <para>
+    /// インストール中の状態には触れない。そちらの成否は <see cref="Reconcile"/> が決める。
+    /// </para>
+    /// </remarks>
+    public static UpdateState ForgetOvertakenFailures(UpdateState state, SemanticVersion running)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.Stage == UpdateStage.Installing || state.RecentFailedVersions.Count == 0)
+        {
+            return state;
+        }
+
+        // 失敗の記録に入るのは、読めた狙いだけである。読めないものは比べようがないので飛ばす
+        foreach (var text in state.RecentFailedVersions)
+        {
+            if (SemanticVersion.TryParse(text, out var failed) && running < failed)
+            {
+                return state;
+            }
+        }
+
+        return state with
+        {
+            RecentFailedVersions = [],
+            AutoUpdateDisabled = false,
+            HasInterruptedInstall = false,
+        };
     }
 
     /// <summary>

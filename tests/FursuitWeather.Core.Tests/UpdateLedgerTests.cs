@@ -262,6 +262,70 @@ public sealed class UpdateLedgerTests
         Assert.Equal(1, state.Attempts.DownloadFailures);
     }
 
+    // ---- 自動の遮断を解く
+
+    private static UpdateState FailedThree()
+    {
+        var state = new UpdateState();
+        foreach (var target in new[] { "0.4.0", "0.5.0", "0.6.0" })
+        {
+            (state, _) = UpdateLedger.Reconcile(
+                UpdateLedger.BeginInstall(state, target, Sha), V("0.3.0"), Now);
+        }
+
+        Assert.True(state.AutoUpdateDisabled);
+        return state;
+    }
+
+    [Fact]
+    public void 手で入れ直して成功すれば自動の遮断も解く()
+    {
+        // 案内どおりに入れ直しても解けないと、以後のどの版も自動では取らず、入れもしない
+        var state = UpdateLedger.AcknowledgeInterruption(FailedThree());
+
+        var (next, outcome) = UpdateLedger.Reconcile(
+            UpdateLedger.BeginInstall(state, "0.6.0", Sha), V("0.6.0"), Now);
+
+        Assert.Equal(InstallOutcome.Succeeded, outcome);
+        Assert.False(next.AutoUpdateDisabled);
+    }
+
+    [Fact]
+    public void 失敗した版をすべて追い越していれば失敗の記録を解く()
+    {
+        // Releasesから手で入れた場合は Installing を通らず、成功の枝に来ない
+        var state = UpdateLedger.ForgetOvertakenFailures(FailedThree(), V("0.6.0"));
+
+        Assert.False(state.AutoUpdateDisabled);
+        Assert.False(state.HasInterruptedInstall);
+        Assert.Empty(state.RecentFailedVersions);
+    }
+
+    [Fact]
+    public void 失敗した版より古ければ失敗の記録を残す()
+    {
+        var failed = FailedThree();
+
+        Assert.Same(failed, UpdateLedger.ForgetOvertakenFailures(failed, V("0.5.9")));
+    }
+
+    [Fact]
+    public void インストール中の状態には触れない()
+    {
+        // 成否は Reconcile が決める。先に解くと、失敗を数え損ねる
+        var installing = UpdateLedger.BeginInstall(FailedThree(), "0.7.0", Sha);
+
+        Assert.Same(installing, UpdateLedger.ForgetOvertakenFailures(installing, V("0.9.0")));
+    }
+
+    [Fact]
+    public void 失敗の記録が無ければ何もしない()
+    {
+        var state = new UpdateState { AutoUpdateDisabled = false };
+
+        Assert.Same(state, UpdateLedger.ForgetOvertakenFailures(state, V("9.9.9")));
+    }
+
     // ---- 取得を終えたとき
 
     [Fact]

@@ -45,6 +45,7 @@ public partial class WidgetWindow : Window, IDisposable
     private ForecastSnapshot? _snapshot;
     private bool _hotKeyRegistered;
     private bool _selfTestDetector;
+    private bool _closed;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
@@ -115,6 +116,8 @@ public partial class WidgetWindow : Window, IDisposable
 
         Closed += (_, _) =>
         {
+            _closed = true;
+
             if (_hotKeyRegistered)
             {
                 UnregisterHotKey(handle, HotKeyId);
@@ -220,7 +223,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// <remarks>
     /// <para>
     /// 起動したら最初に、前回のインストールの成否を確定する。
-    /// 本体を起動し直すのはインストーラーの <c>[Run]</c> であり、ここで狙った版と照らす。
+    /// 本体を起動し直すのはインストーラーであり、ここで狙った版と照らす。
     /// </para>
     /// <para>
     /// <c>--update-manifest-url=</c> で確認先を差し替えられる。
@@ -879,6 +882,24 @@ public partial class WidgetWindow : Window, IDisposable
         {
             _clickThrough.Pin();
         }
+    }
+
+    /// <summary>
+    /// 2つ目の起動から求められて、小窓を出す。
+    /// </summary>
+    /// <remarks>
+    /// 2つ目は自分では何もせずに終わる。
+    /// 隠した小窓を出したくて起動した人に、何も起きないように見せないためである。
+    /// </remarks>
+    public void RevealForUser()
+    {
+        // 終わる途中で合図が来ることがある。閉じた窓を出そうとすると例外で落ちる
+        if (_closed)
+        {
+            return;
+        }
+
+        ApplyLayer(ShowRequest.User);
     }
 
     private void OnToggleVisibility(object sender, RoutedEventArgs e)

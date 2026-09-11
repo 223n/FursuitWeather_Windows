@@ -84,8 +84,16 @@ LicenseFile={#SourcePath}\..\LICENSE
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [Files]
-; self-contained の発行結果をまるごと置く
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; self-contained の発行結果をまるごと置く。
+;
+; 版を読む FursuitWeather.Widget.dll は最後に置く。
+; 置き換えの途中で止まると、Inno の巻き戻しは前からあったファイルを戻さない。
+; 版を持つファイルが先に新しくなると、次の起動で版を照らしたときに「入った」と誤って判定する。
+; 名前順に置かれるため、何もしないと Widget.dll は305個のうち18番目に来る。
+; 版が切り替わるのを、ほかのすべてが揃ったあとにする
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "\FursuitWeather.*"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDir}\FursuitWeather.*"; DestDir: "{app}"; Excludes: "\FursuitWeather.Widget.dll"; Flags: ignoreversion
+Source: "{#PublishDir}\FursuitWeather.Widget.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 #ifdef RuntimeInstaller
 ; Windows App SDK のランタイム。入れ終わったら消す
@@ -102,14 +110,13 @@ Name: "desktopicon"; Description: "デスクトップにショートカットを
 [Run]
 ; 人が入れたとき。完了のページのチェックボックスになる
 Filename: "{app}\{#AppExeName}"; Description: "{#AppName} を起動する"; Flags: nowait postinstall skipifsilent
-; 更新から入れたとき。
-; postinstall は完了のページの部品なので、サイレントでは意味を持たない。
-; skipifsilent と skipifnotsilent を並べるのが、サイレントでも起動し直す唯一の正攻法である。
-; /RELAUNCH=1 が付いているときだけ動かす。人が /VERYSILENT で入れたときに
-; 勝手に起動しないようにするためである。
-; この行が走るのは、インストールが最後まで進んだときだけである。
-; 途中で止まったときは DeinitializeSetup が起動し直す。済ませたことを NoteRelaunched で残す
-Filename: "{app}\{#AppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldRelaunch; BeforeInstall: NoteRelaunched
+; 更新から入れたときの起動し直しは、ここに置かない。[Code] の CurStepChanged で行う。
+;
+; postinstall でない行は、CurStepChanged(ssPostInstall) より前に走る。
+; Inno のソース（Setup.MainForm.pas の TMainForm.Install）で確かめた。
+; ここで起動すると、Windows App SDK のランタイムを入れる前に本体が立ち上がる。
+; ランタイムの版を上げた更新では、本体がブートストラップに失敗して黙って終わり、
+; 利用者が手で起動するまで暑さの通知も止まる
 
 [Code]
 { 更新から呼ばれたときは、呼び元のプロセスが終わるのを待つ。
@@ -130,7 +137,7 @@ var
   { 呼び元のプロセスのハンドル。DeinitializeSetup まで閉じない。
     閉じると PID が別のプロセスへ使い回され、終わったかを取り違えうる }
   CallerHandle: LongWord;
-  { [Run] の行で起動し直したか }
+  { 本体を起動し直したか。二度は起動しない }
   Relaunched: Boolean;
 
 function OpenProcess(dwDesiredAccess: LongWord; bInheritHandle: Boolean; dwProcessId: LongWord): LongWord;
@@ -143,15 +150,12 @@ function CloseHandle(hObject: LongWord): Boolean;
   external 'CloseHandle@kernel32.dll stdcall';
 
 { 更新から呼ばれたときだけ、終わったあとにアプリを起動し直す。
-  人が /VERYSILENT で入れたときに、勝手に起動しないようにするためである }
+  人が /VERYSILENT で入れたときに、勝手に起動しないようにするためである。
+  ウィザードを出しているときは、完了のページのチェックボックスに任せる。
+  両方で起動すると二重になる }
 function ShouldRelaunch(): Boolean;
 begin
-  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
-end;
-
-procedure NoteRelaunched();
-begin
-  Relaunched := True;
+  Result := WizardSilent() and (ExpandConstant('{param:RELAUNCH|0}') = '1');
 end;
 
 procedure CloseCaller();
@@ -198,41 +202,13 @@ begin
   Result := True;
 end;
 
-{ 更新から呼ばれたのに、[Run] の行で起動し直せなかったときの受け皿。
-
-  インストールが途中で止まると [Run] は走らない。
-  ファイルが掴まれている、空き容量が足りない、といった理由で起きる。
-  /SUPPRESSMSGBOXES は Abort/Retry を Abort で答えるため、サイレントのまま中止する。
-  呼び元はもう終わっているので、ここで起動しないと利用者が手で起動するまで何も動かない。
-  そのあいだ暑さの通知は出ず、更新の確認も走らない。
-
-  中止のときの巻き戻しは、置き換えたファイルを元に戻さない。
-  Inno のソースで確かめた。前からあったファイルは utDeleteFile_ExistedBeforeInstall の印が付き、消されも戻されもしない。
-  版が混ざって起動できない場合は残るが、黙って消えるよりはよい。
-  起動したアプリは狙った版と照らし、途中で終わったことを利用者に知らせる。
-
-  DeinitializeSetup は中止したときも呼ばれる。
-  CurStepChanged(ssDone) は使えない。準備の段階で止まったときや再起動が要るときにも来て、
-  そのとき [Run] は走らない。 }
-procedure DeinitializeSetup();
+{ 本体を起動し直す。起動できたかに関わらず、二度は試さない }
+procedure Relaunch(const Situation: string);
 var
   AppDir, Exe: string;
   ResultCode: Integer;
 begin
-  if Relaunched or not ShouldRelaunch() then
-  begin
-    CloseCaller();
-    Exit;
-  end;
-
-  { 呼び元がまだ動いているなら起動しない。二重に常駐させない }
-  if (CallerHandle <> 0) and (WaitForSingleObject(CallerHandle, WAIT_LIMIT_MS) = WAIT_TIMEOUT) then
-  begin
-    Log('更新: 呼び元がまだ動いているため、起動し直さない');
-    CloseCaller();
-    Exit;
-  end;
-  CloseCaller();
+  Relaunched := True;
 
   { インストール先が決まる前に終わったときは、app 定数を展開できない }
   try
@@ -250,9 +226,45 @@ begin
   end;
 
   if Exec(Exe, '', AppDir, SW_SHOWNORMAL, ewNoWait, ResultCode) then
-    Log('更新: インストールが最後まで進まなかったため、本体を起動し直した')
+    Log('更新: ' + Situation + 'ため、本体を起動し直した')
   else
     Log(Format('更新: 本体を起動し直せなかった。コード %d', [ResultCode]));
+end;
+
+{ 更新から呼ばれたのに、インストールが最後まで進まなかったときの受け皿。
+
+  ファイルが掴まれている、空き容量が足りない、といった理由で中止する。
+  /SUPPRESSMSGBOXES は Abort/Retry を Abort で答えるため、サイレントのまま止まる。
+  呼び元はもう終わっているので、ここで起動しないと利用者が手で起動するまで何も動かない。
+  そのあいだ暑さの通知は出ず、更新の確認も走らない。
+
+  中止すると CurStepChanged(ssPostInstall) にも ssDone にも来ない。
+  Inno のソース（Setup.MainForm.pas の TMainForm.Install）では、PerformInstall が
+  失敗すると TerminateApp で抜ける。中止しても呼ばれるのは DeinitializeSetup だけである。
+
+  中止のときの巻き戻しは、置き換えたファイルを元に戻さない。
+  Inno のソースで確かめた。前からあったファイルは utDeleteFile_ExistedBeforeInstall の印が付き、消されも戻されもしない。
+  版を読む FursuitWeather.Widget.dll を最後に置いているため、途中で止まれば古い版のまま残る。
+  起動したアプリは狙った版と照らし、途中で終わったことを利用者に知らせる。
+  版が混ざって起動できない場合は残るが、黙って消えるよりはよい。 }
+procedure DeinitializeSetup();
+begin
+  if Relaunched or not ShouldRelaunch() then
+  begin
+    CloseCaller();
+    Exit;
+  end;
+
+  { 呼び元がまだ動いているなら起動しない。二重に常駐させない }
+  if (CallerHandle <> 0) and (WaitForSingleObject(CallerHandle, WAIT_LIMIT_MS) = WAIT_TIMEOUT) then
+  begin
+    Log('更新: 呼び元がまだ動いているため、起動し直さない');
+    CloseCaller();
+    Exit;
+  end;
+  CloseCaller();
+
+  Relaunch('インストールが最後まで進まなかった');
 end;
 
 { Windows App SDK のランタイムを連鎖インストールする。
@@ -374,19 +386,24 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 
-  if InstallRuntime() then
-    Exit;
+  if not InstallRuntime() then
+  begin
+    { 止めないが、実態どおりに伝える。
+      ブートストラッパーが ModuleInitializer から走るため、
+      ランタイムが無いとアプリは起動そのものができない。
+      「通知だけが出ない」と伝えるのは誤りだった }
+    MsgBox(
+      'Windows App SDK のランタイムを入れられませんでした。' + #13#10 +
+      'このままでは FursuitWeather を起動できません。' + #13#10#13#10 +
+      '次のいずれかを試してください。' + #13#10 +
+      '  ・管理者に確認のうえ、もう一度インストールする' + #13#10 +
+      '  ・Microsoft の配布する Windows App Runtime を手で入れる' + #13#10#13#10 +
+      '詳しい経緯はインストールのログに残っています。',
+      mbError, MB_OK);
+  end;
 
-  { 止めないが、実態どおりに伝える。
-    ブートストラッパーが ModuleInitializer から走るため、
-    ランタイムが無いとアプリは起動そのものができない。
-    「通知だけが出ない」と伝えるのは誤りだった }
-  MsgBox(
-    'Windows App SDK のランタイムを入れられませんでした。' + #13#10 +
-    'このままでは FursuitWeather を起動できません。' + #13#10#13#10 +
-    '次のいずれかを試してください。' + #13#10 +
-    '  ・管理者に確認のうえ、もう一度インストールする' + #13#10 +
-    '  ・Microsoft の配布する Windows App Runtime を手で入れる' + #13#10#13#10 +
-    '詳しい経緯はインストールのログに残っています。',
-    mbError, MB_OK);
+  { 更新から呼ばれたときは、ランタイムを入れ終えてから起動し直す。
+    Run セクションの行はここより前に走るため、ランタイムの版を上げた更新で起動に失敗する }
+  if ShouldRelaunch() then
+    Relaunch('インストールとランタイムの導入を終えた');
 end;
