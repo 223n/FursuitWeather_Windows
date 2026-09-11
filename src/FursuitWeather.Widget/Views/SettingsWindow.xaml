@@ -24,6 +24,18 @@
         </StackPanel>
 
         <!--
+            保存の失敗はボタンのすぐ上に出す。
+            スクロールの内側に置くと、下の項目を触っている位置からは見えず、何も起きないように見える
+        -->
+        <TextBlock x:Name="ErrorText"
+                   DockPanel.Dock="Bottom"
+                   Margin="0,12,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#99260C"
+                   Visibility="Collapsed" />
+
+        <!--
             更新の状態はスクロールの外に置き、常に見せる。
             最後に確認した日時は、静かに失敗する設計では「壊れていない」ことの唯一の証拠になる。
             スクロールの下に隠すと、その役を果たさない
@@ -83,13 +95,6 @@
                     <TextBlock Text="表示名" VerticalAlignment="Center" />
                     <TextBox x:Name="PlaceBox" Grid.Column="1" Margin="8,0,0,0" />
                 </Grid>
-
-                <TextBlock x:Name="ErrorText"
-                           Margin="0,8,0,0"
-                           FontSize="11"
-                           TextWrapping="Wrap"
-                           Foreground="#99260C"
-                           Visibility="Collapsed" />
 
                 <Separator Margin="0,16,0,12" />
 

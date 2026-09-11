@@ -336,6 +336,14 @@ public partial class WidgetWindow : Window, IDisposable
             return;
         }
 
+        // 設定画面が開いているあいだは、自動では入れない。
+        // 入れると設定画面ごとアプリが終わり、未保存の入力が黙って消える。
+        // TryInstall を呼ばないので「このプロセスで試した」印も立たず、閉じたあとの見直しが拾い直す
+        if (!manual && _settingsWindow is not null)
+        {
+            return;
+        }
+
         var reason = _updates.TryInstall(manual);
         if (reason is null)
         {

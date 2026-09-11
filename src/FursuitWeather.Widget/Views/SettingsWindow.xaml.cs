@@ -151,17 +151,9 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        // 更新の扱いを先に当てる。保存できなければ閉じない。
-        // 閉じてしまうと、変えられなかったことが利用者に伝わらない
-        if (_updates is not null &&
-            !_updates.ApplyPreferences(ReadUpdateMode(), PauseOnMeteredCheck.IsChecked == true, PauseOnBatteryCheck.IsChecked == true))
-        {
-            ShowError("更新の扱いを保存できませんでした。ファイルを書き込めない状態の可能性があります。");
-            return;
-        }
-
         var startup = StartupCheck.IsChecked == true;
-        if (startup != StartupRegistration.IsEffectivelyEnabled())
+        var startupChanged = startup != StartupRegistration.IsEffectivelyEnabled();
+        if (startupChanged)
         {
             // 座標や表示名の検証と同じく、失敗したら閉じない。
             // 閉じてしまうと、変えられなかったことが利用者に伝わらない
@@ -179,6 +171,22 @@ public partial class SettingsWindow : Window
                 StartupCheck.IsChecked = StartupRegistration.IsEffectivelyEnabled();
                 return;
             }
+        }
+
+        // 更新の扱いは、失敗しうる処理を済ませてから当てる。
+        // 先に当てると、あとの失敗で画面を閉じずに「やめる」で閉じられたとき、扱いの変更だけが残る。
+        // 当てられなければ、変えた自動起動を元へ戻してから止まる
+        if (_updates is not null &&
+            !_updates.ApplyPreferences(ReadUpdateMode(), PauseOnMeteredCheck.IsChecked == true, PauseOnBatteryCheck.IsChecked == true))
+        {
+            if (startupChanged && Environment.ProcessPath is { } revertPath)
+            {
+                StartupRegistration.Set(!startup, revertPath);
+                StartupCheck.IsChecked = StartupRegistration.IsEffectivelyEnabled();
+            }
+
+            ShowError("更新の扱いを保存できませんでした。ファイルを書き込めない状態の可能性があります。");
+            return;
         }
 
         Result = _original with
