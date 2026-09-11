@@ -266,6 +266,29 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Theory]
+    [InlineData("https://github.com/223n/x/releases/download/v0.4.0/")]
+    [InlineData("https://github.com/")]
+    [InlineData("https://github.com/223n/x/releases/download/v0.4.0/..")]
+    public void 置くときの名前を取り出せなければ配らない(string url)
+    {
+        // 通すと取得の段で例外になり、確認のたびにアプリが落ちる
+        var result = Run(Manifest(url: url));
+
+        Assert.Equal(UpdateVerdict.PackageInvalid, result.Verdict);
+    }
+
+    [Fact]
+    public void 置くときの名前はURLの最後の区切りから取る()
+    {
+        var package = new UpdatePackage
+        {
+            Url = "https://github.com/223n/FursuitWeather_Windows/releases/download/v0.4.0/FursuitWeather-0.4.0-x64-setup.exe",
+        };
+
+        Assert.Equal("FursuitWeather-0.4.0-x64-setup.exe", ManifestVerifier.PackageFileName(package));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("abc")]
     [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]

@@ -270,8 +270,13 @@ public partial class WidgetWindow : Window, IDisposable
             return;
         }
 
+        // 取得前の知らせで「インストール」へ誘うと、押しても無効の項目に行き当たる
+        var hint = _updates.HasDownloadedUpdate
+            ? "トレイの「更新をインストール」から入れられます"
+            : "トレイの「更新を確認」から受け取れます";
+
         if (_updates.DecidePrompt() == Core.Update.PromptChannel.Toast &&
-            _toast.Show("FursuitWeather の更新", [message, "トレイのメニューから入れられます"]))
+            _toast.Show("FursuitWeather の更新", [message, hint]))
         {
             _updates.RecordPrompt();
         }
@@ -287,10 +292,13 @@ public partial class WidgetWindow : Window, IDisposable
             return;
         }
 
+        // 見出しに出すのは、実際に入る版である。見つけた版を出すと、新しい版が出た直後に食い違う
         InstallUpdateItem.IsEnabled = _updates.HasDownloadedUpdate;
-        InstallUpdateItem.Header = _updates.AvailableVersion is { } version && _updates.HasDownloadedUpdate
+        InstallUpdateItem.Header = _updates.DownloadedVersion is { } version
             ? string.Create(CultureInfo.InvariantCulture, $"更新をインストール（{version}）")
             : "更新をインストール";
+
+        UpdateTrayState();
     }
 
     private async void OnCheckUpdate(object sender, RoutedEventArgs e)
@@ -302,9 +310,24 @@ public partial class WidgetWindow : Window, IDisposable
 
         await _updates.CheckNowAsync().ConfigureAwait(true);
 
-        // 取得のゲートで止まっていたら、押した人にはそのまま取らせる
-        if (_updates.State.Stage is Core.Update.UpdateStage.DownloadHeld or Core.Update.UpdateStage.UpdateAvailable)
+        // 取得のゲートで止まっていたら、理由と大きさを見せてから尋ねる。
+        // 押されたのは「確認」であり、取得への同意ではない。
+        // 従量制課金の回線で、黙って200MB近くを落とさない
+        if (!_updates.HasDownloadedUpdate &&
+            _updates.AvailableVersion is { } version &&
+            _updates.AvailableSize is { } size &&
+            _updates.State.Stage is Core.Update.UpdateStage.DownloadHeld
+                or Core.Update.UpdateStage.UpdateAvailable
+                or Core.Update.UpdateStage.DownloadPaused)
         {
+            var question = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{version} が出ています（約{size / 1024d / 1024d:F0}MB）。\n{_updates.LastMessage}\n\n今すぐ取得しますか？");
+            if (ShowDialog(question, MessageBoxImage.Question, MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
             await _updates.DownloadNowAsync().ConfigureAwait(true);
         }
 
@@ -335,7 +358,7 @@ public partial class WidgetWindow : Window, IDisposable
             return;
         }
 
-        // 自動の経路で見送ったときは黙る。理由は診断の画面に残る
+        // 自動の経路で見送ったときは黙る。理由はサービスが状態に残し、診断の画面に出る
         if (manual)
         {
             ShowDialog(reason, MessageBoxImage.Information);
@@ -568,12 +591,11 @@ public partial class WidgetWindow : Window, IDisposable
     /// 隠れている小窓を親にすると、案内が背面へ回って触れなくなる。
     /// 見えていないときは親を付けず、最前面で出す。
     /// </remarks>
-    private void ShowDialog(string text, MessageBoxImage icon)
+    private MessageBoxResult ShowDialog(string text, MessageBoxImage icon, MessageBoxButton buttons = MessageBoxButton.OK)
     {
         if (IsVisible)
         {
-            MessageBox.Show(this, text, "FursuitWeather", MessageBoxButton.OK, icon);
-            return;
+            return MessageBox.Show(this, text, "FursuitWeather", buttons, icon);
         }
 
         var host = new Window
@@ -591,7 +613,7 @@ public partial class WidgetWindow : Window, IDisposable
         host.Show();
         try
         {
-            MessageBox.Show(host, text, "FursuitWeather", MessageBoxButton.OK, icon);
+            return MessageBox.Show(host, text, "FursuitWeather", buttons, icon);
         }
         finally
         {
@@ -808,7 +830,18 @@ public partial class WidgetWindow : Window, IDisposable
     private void UpdateTrayState()
     {
         var state = _clickThrough?.Describe() ?? "クリックスルー: 切";
-        TrayIcon.ToolTipText = $"FursuitWeather\n{state}";
+
+        // 割り込まないと決めた更新の知らせも、ここには必ず出す
+        var tip = _updates?.TrayLine is { } update
+            ? $"FursuitWeather\n{state}\n{update}"
+            : $"FursuitWeather\n{state}";
+
+        // 更新の知らせは毎分渡し直されるため、変わったときだけ書く。書くたびにシェルへ通知が飛ぶ
+        if (!string.Equals(TrayIcon.ToolTipText, tip, StringComparison.Ordinal))
+        {
+            TrayIcon.ToolTipText = tip;
+        }
+
         ClickThroughItem.IsChecked = _clickThrough?.IsEnabled ?? false;
         PinItem.IsEnabled = _clickThrough?.IsEnabled ?? false;
         PinItem.IsChecked = _clickThrough?.IsPinned ?? false;

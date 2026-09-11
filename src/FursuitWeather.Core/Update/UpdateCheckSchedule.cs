@@ -91,10 +91,18 @@ public static class UpdateCheckSchedule
     /// <param name="uptime">アプリが起動してからの時間。</param>
     /// <param name="phase">端末ごとに決めた0以上1未満の値。</param>
     /// <param name="options">調整値。省略すると既定値。</param>
+    /// <param name="checkedThisSession">このプロセスで一度でも確認したか。</param>
     /// <returns>行くべきなら true。</returns>
     /// <remarks>
+    /// <para>
     /// <b>確認だけは、どのモードでも自動で行う。</b>
     /// 止まるのは取得と適用である。
+    /// </para>
+    /// <para>
+    /// 更新が途中のまま起動したときは、周期を待たずに1回だけ確認する。
+    /// 見つけた更新はメモリにしか持たないため、確認し直さないと次の周期まで何も進まない。
+    /// 起動の直後の待ちは、この場合も効かせる。
+    /// </para>
     /// </remarks>
     public static bool IsDue(
         UpdateState state,
@@ -102,7 +110,8 @@ public static class UpdateCheckSchedule
         TimeSpan monotonic,
         TimeSpan uptime,
         double phase,
-        UpdateCheckOptions? options = null)
+        UpdateCheckOptions? options = null,
+        bool checkedThisSession = true)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -118,10 +127,34 @@ public static class UpdateCheckSchedule
             return true;
         }
 
+        if (!checkedThisSession && IsPending(state.Stage))
+        {
+            return true;
+        }
+
         var interval = EffectiveInterval(phase, options);
 
         // どちらか一方でも越えていれば行く。
         // 壁時計は利用者の時刻の変更で戻りうるため、単調時刻の側が受け皿になる
         return wallClock - lastWall >= interval || monotonic - lastMonotonic >= interval;
     }
+
+    /// <summary>
+    /// 更新が途中の状態か。
+    /// </summary>
+    /// <param name="stage">保存してあった進み具合。</param>
+    /// <returns>途中なら true。</returns>
+    /// <remarks>
+    /// 失敗と確定したものも含める。
+    /// 入れ直しを案内しているため、確認し直して取得までは進めておく。
+    /// </remarks>
+    public static bool IsPending(UpdateStage stage) => stage is
+        UpdateStage.Checking or
+        UpdateStage.UpdateAvailable or
+        UpdateStage.DownloadHeld or
+        UpdateStage.Downloading or
+        UpdateStage.DownloadPaused or
+        UpdateStage.Downloaded or
+        UpdateStage.InstallHeld or
+        UpdateStage.Failed;
 }

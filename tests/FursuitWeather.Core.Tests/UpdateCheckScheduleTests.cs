@@ -6,6 +6,9 @@ namespace FursuitWeather.Core.Tests;
 /// <summary>更新の確認の周期と、促す時期を見る。</summary>
 public sealed class UpdateCheckScheduleTests
 {
+    private const string ShaA = "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b";
+    private const string ShaB = "60e4c1df2a6d10783be26203062cc612dd0a4f879fe80ef1f2d8b3d41f9a9514";
+
     private static readonly DateTimeOffset Now = JstTime.ToInstant("2026-09-10T12:00")!.Value;
 
     private static UpdateState Checked(DateTimeOffset wall, TimeSpan monotonic) => new()
@@ -242,5 +245,119 @@ public sealed class UpdateCheckScheduleTests
 
         Assert.Equal(1, state.PromptCount);
         Assert.Equal(Now, state.LastPromptAt);
+    }
+
+    [Fact]
+    public void 新しい版を見つけたら割り込みの予算を戻す()
+    {
+        // 戻さないと、アプリの生涯で5回しか知らせない
+        var state = UpdateLedger.RecordAvailable(new UpdateState(), "0.3.1", ShaA) with
+        {
+            LastPromptAt = JstTime.ToInstant("2026-08-01T12:00")!.Value,
+            PromptCount = UpdatePrompt.ToastLimit,
+        };
+        Assert.Equal(PromptChannel.Passive, UpdatePrompt.Decide(state, Now));
+
+        state = UpdateLedger.RecordAvailable(state, "0.3.2", ShaB);
+
+        Assert.Equal(PromptChannel.Toast, UpdatePrompt.Decide(state, Now));
+    }
+
+    [Fact]
+    public void 同じ版のあいだは割り込みの予算を戻さない()
+    {
+        var state = UpdateLedger.RecordAvailable(new UpdateState(), "0.3.1", ShaA) with
+        {
+            LastPromptAt = JstTime.ToInstant("2026-08-01T12:00")!.Value,
+            PromptCount = UpdatePrompt.ToastLimit,
+        };
+
+        state = UpdateLedger.RecordAvailable(state, "0.3.1", ShaA);
+
+        Assert.Equal(PromptChannel.Passive, UpdatePrompt.Decide(state, Now));
+    }
+
+    [Fact]
+    public void 版が変わっても同じ日に二度は割り込まない()
+    {
+        var state = UpdateLedger.RecordAvailable(new UpdateState(), "0.3.1", ShaA) with
+        {
+            LastPromptAt = JstTime.ToInstant("2026-09-10T09:30")!.Value,
+            PromptCount = 1,
+        };
+
+        state = UpdateLedger.RecordAvailable(state, "0.3.2", ShaB);
+
+        Assert.Equal(PromptChannel.Passive, UpdatePrompt.Decide(state, Now));
+    }
+
+    // ---- 更新が途中のまま起動したとき
+
+    private static UpdateState CheckedBeforeReboot(UpdateStage stage) =>
+        Checked(Now.AddHours(-1), TimeSpan.FromHours(5)) with { Stage = stage };
+
+    [Theory]
+    [InlineData(UpdateStage.UpdateAvailable)]
+    [InlineData(UpdateStage.DownloadHeld)]
+    [InlineData(UpdateStage.DownloadPaused)]
+    [InlineData(UpdateStage.Downloaded)]
+    [InlineData(UpdateStage.InstallHeld)]
+    [InlineData(UpdateStage.Failed)]
+    public void 更新が途中のまま起動したら周期を待たずに確認する(UpdateStage stage)
+    {
+        // 見つけた更新はメモリにしか持たない。確かめ直さないと、次の周期まで何も進まない
+        var due = UpdateCheckSchedule.IsDue(
+            CheckedBeforeReboot(stage),
+            Now,
+            TimeSpan.FromMinutes(20),
+            TimeSpan.FromMinutes(20),
+            0.5d,
+            checkedThisSession: false);
+
+        Assert.True(due);
+    }
+
+    [Fact]
+    public void 更新が途中でも起動の待ちは効かせる()
+    {
+        var due = UpdateCheckSchedule.IsDue(
+            CheckedBeforeReboot(UpdateStage.Downloaded),
+            Now,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1),
+            0.5d,
+            checkedThisSession: false);
+
+        Assert.False(due);
+    }
+
+    [Fact]
+    public void 途中の確認はプロセスごとに1回だけ()
+    {
+        var due = UpdateCheckSchedule.IsDue(
+            CheckedBeforeReboot(UpdateStage.DownloadHeld),
+            Now,
+            TimeSpan.FromMinutes(20),
+            TimeSpan.FromMinutes(20),
+            0.5d,
+            checkedThisSession: true);
+
+        Assert.False(due);
+    }
+
+    [Theory]
+    [InlineData(UpdateStage.Idle)]
+    [InlineData(UpdateStage.Succeeded)]
+    public void 途中でなければ周期を待つ(UpdateStage stage)
+    {
+        var due = UpdateCheckSchedule.IsDue(
+            CheckedBeforeReboot(stage),
+            Now,
+            TimeSpan.FromMinutes(20),
+            TimeSpan.FromMinutes(20),
+            0.5d,
+            checkedThisSession: false);
+
+        Assert.False(due);
     }
 }

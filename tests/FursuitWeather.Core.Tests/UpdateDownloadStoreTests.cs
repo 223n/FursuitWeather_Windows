@@ -185,6 +185,82 @@ public sealed class UpdateDownloadStoreTests : IDisposable
         new UpdateDownloadStore(Path.Combine(_root, "まだ無い")).CleanExcept(null);
     }
 
+    // ---- 置いてあるものを使い回す
+
+    private static long SizeOf(string content) => Encoding.UTF8.GetByteCount(content);
+
+    [Fact]
+    public void 置いてあるものがハッシュと一致すれば使う()
+    {
+        // 再起動のたびに200MB近くを取り直さないために要る
+        var written = Written("FursuitWeather");
+        written.Dispose();
+
+        using var found = Store().FindVerified("setup.exe", SizeOf("FursuitWeather"), Sha256Of("FursuitWeather"));
+
+        Assert.NotNull(found);
+        Assert.Equal(written.Id, found.Id);
+
+        // 掴んだまま返す。検証から実行までのあいだに差し替えられないようにする
+        Assert.Equal(Sha256Of("FursuitWeather"), found.ComputeSha256());
+    }
+
+    [Fact]
+    public void ハッシュが違えば使わない()
+    {
+        // 置いてあったこと自体は信用しない。照らす相手は署名を通したマニフェストの値である
+        Written("FursuitWeather").Dispose();
+
+        Assert.Null(Store().FindVerified("setup.exe", SizeOf("FursuitWeather"), Sha256Of("ほかのもの")));
+    }
+
+    [Fact]
+    public void 大きさが違えば使わない()
+    {
+        // 途中で終わった取得の残りがこれに当たる
+        Written("Fursuit").Dispose();
+
+        Assert.Null(Store().FindVerified("setup.exe", SizeOf("FursuitWeather"), Sha256Of("Fursuit")));
+    }
+
+    [Fact]
+    public void 名前が違えば使わない()
+    {
+        Written("FursuitWeather", "old-setup.exe").Dispose();
+
+        Assert.Null(Store().FindVerified("setup.exe", SizeOf("FursuitWeather"), Sha256Of("FursuitWeather")));
+    }
+
+    [Theory]
+    [InlineData("../setup.exe")]
+    [InlineData("..\\setup.exe")]
+    [InlineData("C:setup.exe")]
+    public void ディレクトリを含む名前では探さない(string fileName)
+    {
+        Assert.Null(Store().FindVerified(fileName, 1, Sha256Of("x")));
+    }
+
+    [Fact]
+    public void 根が無くても探して落ちない()
+    {
+        Assert.Null(new UpdateDownloadStore(Path.Combine(_root, "まだ無い"))
+            .FindVerified("setup.exe", 1, Sha256Of("x")));
+    }
+
+    [Fact]
+    public void 使わなかったものは掴んだままにしない()
+    {
+        // 掴んだままだと、あとの掃除で消せずに積もる
+        var store = Store();
+        var written = Written("FursuitWeather");
+        written.Dispose();
+
+        Assert.Null(store.FindVerified("setup.exe", SizeOf("FursuitWeather"), Sha256Of("ほかのもの")));
+        store.CleanExcept(null);
+
+        Assert.False(Directory.Exists(written.Directory));
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

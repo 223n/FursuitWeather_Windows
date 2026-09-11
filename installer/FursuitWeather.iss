@@ -106,8 +106,10 @@ Filename: "{app}\{#AppExeName}"; Description: "{#AppName} を起動する"; Flag
 ; postinstall は完了のページの部品なので、サイレントでは意味を持たない。
 ; skipifsilent と skipifnotsilent を並べるのが、サイレントでも起動し直す唯一の正攻法である。
 ; /RELAUNCH=1 が付いているときだけ動かす。人が /VERYSILENT で入れたときに
-; 勝手に起動しないようにするためである
-Filename: "{app}\{#AppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldRelaunch
+; 勝手に起動しないようにするためである。
+; この行が走るのは、インストールが最後まで進んだときだけである。
+; 途中で止まったときは DeinitializeSetup が起動し直す。済ませたことを NoteRelaunched で残す
+Filename: "{app}\{#AppExeName}"; Flags: nowait skipifnotsilent; Check: ShouldRelaunch; BeforeInstall: NoteRelaunched
 
 [Code]
 { 更新から呼ばれたときは、呼び元のプロセスが終わるのを待つ。
@@ -123,6 +125,13 @@ const
   WAIT_TIMEOUT = $00000102;
   { 呼び元が固まったときに、インストーラーまで固まらせない }
   WAIT_LIMIT_MS = 30000;
+
+var
+  { 呼び元のプロセスのハンドル。DeinitializeSetup まで閉じない。
+    閉じると PID が別のプロセスへ使い回され、終わったかを取り違えうる }
+  CallerHandle: LongWord;
+  { [Run] の行で起動し直したか }
+  Relaunched: Boolean;
 
 function OpenProcess(dwDesiredAccess: LongWord; bInheritHandle: Boolean; dwProcessId: LongWord): LongWord;
   external 'OpenProcess@kernel32.dll stdcall';
@@ -140,10 +149,23 @@ begin
   Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
 end;
 
+procedure NoteRelaunched();
+begin
+  Relaunched := True;
+end;
+
+procedure CloseCaller();
+begin
+  if CallerHandle <> 0 then
+  begin
+    CloseHandle(CallerHandle);
+    CallerHandle := 0;
+  end;
+end;
+
 procedure WaitForCaller();
 var
   Pid: Integer;
-  Handle: LongWord;
   Waited: LongWord;
 begin
   Pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
@@ -152,16 +174,16 @@ begin
 
   Log(Format('更新: PID %d の終了を待つ', [Pid]));
 
-  Handle := OpenProcess(SYNCHRONIZE, False, Pid);
-  if Handle = 0 then
+  CallerHandle := OpenProcess(SYNCHRONIZE, False, Pid);
+  if CallerHandle = 0 then
   begin
     { もう終わっている。開けないこと自体は失敗ではない }
     Log('更新: 呼び元のプロセスは見つからなかった。すでに終わっているとみなす');
     Exit;
   end;
 
-  Waited := WaitForSingleObject(Handle, WAIT_LIMIT_MS);
-  CloseHandle(Handle);
+  { ハンドルはここで閉じない。DeinitializeSetup で、呼び元が終わったかをもう一度見る }
+  Waited := WaitForSingleObject(CallerHandle, WAIT_LIMIT_MS);
 
   if Waited = WAIT_TIMEOUT then
     Log('更新: 呼び元が時間内に終わらなかった。上書きに失敗する可能性がある')
@@ -174,6 +196,63 @@ function InitializeSetup(): Boolean;
 begin
   WaitForCaller();
   Result := True;
+end;
+
+{ 更新から呼ばれたのに、[Run] の行で起動し直せなかったときの受け皿。
+
+  インストールが途中で止まると [Run] は走らない。
+  ファイルが掴まれている、空き容量が足りない、といった理由で起きる。
+  /SUPPRESSMSGBOXES は Abort/Retry を Abort で答えるため、サイレントのまま中止する。
+  呼び元はもう終わっているので、ここで起動しないと利用者が手で起動するまで何も動かない。
+  そのあいだ暑さの通知は出ず、更新の確認も走らない。
+
+  中止のときの巻き戻しは、置き換えたファイルを元に戻さない。
+  Inno のソースで確かめた。前からあったファイルは utDeleteFile_ExistedBeforeInstall の印が付き、消されも戻されもしない。
+  版が混ざって起動できない場合は残るが、黙って消えるよりはよい。
+  起動したアプリは狙った版と照らし、途中で終わったことを利用者に知らせる。
+
+  DeinitializeSetup は中止したときも呼ばれる。
+  CurStepChanged(ssDone) は使えない。準備の段階で止まったときや再起動が要るときにも来て、
+  そのとき [Run] は走らない。 }
+procedure DeinitializeSetup();
+var
+  AppDir, Exe: string;
+  ResultCode: Integer;
+begin
+  if Relaunched or not ShouldRelaunch() then
+  begin
+    CloseCaller();
+    Exit;
+  end;
+
+  { 呼び元がまだ動いているなら起動しない。二重に常駐させない }
+  if (CallerHandle <> 0) and (WaitForSingleObject(CallerHandle, WAIT_LIMIT_MS) = WAIT_TIMEOUT) then
+  begin
+    Log('更新: 呼び元がまだ動いているため、起動し直さない');
+    CloseCaller();
+    Exit;
+  end;
+  CloseCaller();
+
+  { インストール先が決まる前に終わったときは、app 定数を展開できない }
+  try
+    AppDir := ExpandConstant('{app}');
+  except
+    Log('更新: インストール先が決まる前に終わったため、起動し直せない');
+    Exit;
+  end;
+
+  Exe := AppDir + '\{#AppExeName}';
+  if not FileExists(Exe) then
+  begin
+    Log('更新: 起動し直す本体が無い: ' + Exe);
+    Exit;
+  end;
+
+  if Exec(Exe, '', AppDir, SW_SHOWNORMAL, ewNoWait, ResultCode) then
+    Log('更新: インストールが最後まで進まなかったため、本体を起動し直した')
+  else
+    Log(Format('更新: 本体を起動し直せなかった。コード %d', [ResultCode]));
 end;
 
 { Windows App SDK のランタイムを連鎖インストールする。

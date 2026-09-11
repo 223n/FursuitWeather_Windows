@@ -97,8 +97,15 @@ public static class UpdateGate
     /// <param name="now">いまの時刻。</param>
     /// <returns>判断。</returns>
     /// <remarks>
+    /// <para>
     /// 見送るのは従量制課金と電池のときである。
     /// 全画面や起動直後は取得を妨げない。裏で受け取るだけで割り込まないためである。
+    /// </para>
+    /// <para>
+    /// <b>呼ぶ前に <see cref="UpdateLedger.RecordAvailable"/> で狙いを張り直すこと。</b>
+    /// 失敗の記録は狙いの版とSHA-256に紐づく。
+    /// 張り直さずに見ると、前の版の失敗で次の版まで止める。
+    /// </para>
     /// </remarks>
     public static GateDecision ForDownload(UpdateState state, UpdateConditions conditions, DateTimeOffset now)
     {
@@ -132,9 +139,12 @@ public static class UpdateGate
             return GateDecision.Hold(UpdateHoldReason.RetryBackoff, at);
         }
 
-        if (UpdateRetryPolicy.IsDownloadExhausted(state.Attempts))
+        if (UpdateRetryPolicy.IsDownloadExhausted(state.Attempts, now))
         {
-            return GateDecision.Hold(UpdateHoldReason.RetryBackoff);
+            // 窓が明ける時刻を返す。時間で解ける見送りを「解けない」と見せない
+            return GateDecision.Hold(
+                UpdateHoldReason.RetryBackoff,
+                state.Attempts.LastDownloadFailureAt + UpdateRetryPolicy.DownloadWindow);
         }
 
         return GateDecision.Proceed;

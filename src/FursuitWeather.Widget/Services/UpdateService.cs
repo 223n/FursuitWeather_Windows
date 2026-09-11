@@ -56,9 +56,12 @@ public sealed class UpdateService : IDisposable
 
     private UpdateState _state;
     private ManifestVerification? _available;
-    private UpdateDownload? _download;
+    private DownloadedUpdate? _download;
+    private string? _pendingNotice;
     private bool _busy;
     private bool _disposed;
+    private bool _checkedThisSession;
+    private bool _autoInstallAttempted;
 
     /// <summary>状態が変わったときに起きる。</summary>
     public event EventHandler? Changed;
@@ -83,10 +86,47 @@ public sealed class UpdateService : IDisposable
     public UpdateState State => _state;
 
     /// <summary>取得を終えて、インストールできる更新があるか。</summary>
-    public bool HasDownloadedUpdate => _download is not null && _available?.Version is not null;
+    public bool HasDownloadedUpdate => _download is not null;
+
+    /// <summary>取得を終えた更新の版。無ければ null。</summary>
+    /// <remarks>
+    /// インストールで入るのはこの版である。
+    /// <see cref="AvailableVersion"/> と取り違えないこと。新しい版が出た直後は食い違いうる。
+    /// </remarks>
+    public SemanticVersion? DownloadedVersion => _download?.Version;
 
     /// <summary>見つかった更新の版。無ければ null。</summary>
     public SemanticVersion? AvailableVersion => _available?.Version;
+
+    /// <summary>見つかった更新の配布物の大きさ。無ければ null。</summary>
+    public long? AvailableSize => _available?.Package?.Size;
+
+    /// <summary>
+    /// トレイのツールチップに足す1行。出すものが無ければ null。
+    /// </summary>
+    /// <remarks>
+    /// 割り込まないと決めた知らせの受け皿である。
+    /// トーストを出さなくても、更新があることはここで分かる。
+    /// </remarks>
+    public string? TrayLine
+    {
+        get
+        {
+            if (_download is not null)
+            {
+                return string.Create(CultureInfo.InvariantCulture, $"更新: {_download.Version} を入れられます");
+            }
+
+            if (_state.Stage == UpdateStage.Failed)
+            {
+                return "更新: 前回のインストールが途中で終わりました";
+            }
+
+            return _available?.Version is { } version && UpdateCheckSchedule.IsPending(_state.Stage)
+                ? string.Create(CultureInfo.InvariantCulture, $"更新: {version} が出ています")
+                : null;
+        }
+    }
 
     /// <summary>直近の結果を1行で。診断と設定画面に出す。</summary>
     public string LastMessage { get; private set; } = "まだ確認していません";
@@ -132,8 +172,14 @@ public sealed class UpdateService : IDisposable
                 : "前回のインストールが途中で終わりました。次は確認してから実行します";
         }
 
-        // 置いたままのものを片付ける。次に使うのは新しく取ったものだけである
-        _store.CleanExcept(null);
+        // 入れ終えたなら、置いたものはもう要らない。
+        // 途中のままなら残す。次の確認で、署名を通したマニフェストと照らしてから使い回す。
+        // 起動のたびに消すと、入れるのを待っている利用者が再起動のたびに200MB近くを取り直す
+        if (outcome == InstallOutcome.Succeeded || !UpdateCheckSchedule.IsPending(_state.Stage))
+        {
+            _store.CleanExcept(null);
+        }
+
         return outcome;
     }
 
@@ -185,11 +231,91 @@ public sealed class UpdateService : IDisposable
             DateTimeOffset.UtcNow,
             TimeSpan.FromMilliseconds(Environment.TickCount64),
             UpdateEnvironment.Read(0).Uptime,
-            _phase);
+            _phase,
+            checkedThisSession: _checkedThisSession);
 
         if (due)
         {
             await CheckAsync(manual: false).ConfigureAwait(true);
+        }
+        else
+        {
+            await ResumeIfUnblockedAsync().ConfigureAwait(true);
+        }
+
+        // 時間帯の外などで割り込まなかった知らせを、出せるときが来たら出す。
+        // 出すかどうかは受け取った側が決める。出さなければ残り、次の tick でまた渡す
+        if (_pendingNotice is { } message && !_disposed)
+        {
+            Notice?.Invoke(this, message);
+        }
+    }
+
+    /// <summary>
+    /// 保留と中断を、条件が解けたところで先へ進める。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 通信はしない。見るのは手元の状態と環境だけである。
+    /// 周期の確認だけに頼ると、電池で保留したものがAC電源に挿しても翌日まで動かない。
+    /// 失敗のあとの1分、5分、15分の待ちも、使われないまま切れる。
+    /// </para>
+    /// <para>
+    /// 自動のインストールは、このプロセスで1回しか試さない。
+    /// 起動できなかったものを毎分試し直さないためである。
+    /// </para>
+    /// </remarks>
+    private async Task ResumeIfUnblockedAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (_download is null &&
+            _available?.Package is { } package &&
+            _state.Stage is UpdateStage.DownloadHeld or UpdateStage.DownloadPaused)
+        {
+            var gate = UpdateGate.ForDownload(_state, UpdateEnvironment.Read(package.Size), now);
+            if (!gate.CanProceed)
+            {
+                // 見送る理由が変わったら書き換える。電池から従量制へ、のように移りうる
+                if (gate.Outcome == GateOutcome.Hold && _state.Stage == UpdateStage.DownloadHeld)
+                {
+                    var text = UpdateGate.Describe(gate.Reason);
+                    if (!string.Equals(text, LastMessage, StringComparison.Ordinal))
+                    {
+                        SetStage(UpdateStage.DownloadHeld, text);
+                    }
+                }
+
+                return;
+            }
+
+            _busy = true;
+            try
+            {
+                await DownloadCoreAsync(manual: false).ConfigureAwait(true);
+            }
+            finally
+            {
+                _busy = false;
+            }
+
+            return;
+        }
+
+        if (_download is not null &&
+            !_autoInstallAttempted &&
+            _state.Mode == UpdateMode.Automatic &&
+            _state.Stage is UpdateStage.Downloaded or UpdateStage.InstallHeld)
+        {
+            var gate = UpdateGate.ForInstall(_state, UpdateEnvironment.Read(0), now);
+            if (gate.CanProceed)
+            {
+                InstallReady?.Invoke(this, EventArgs.Empty);
+            }
+            else if (gate.Outcome == GateOutcome.Hold)
+            {
+                HoldInstall(gate.Reason);
+            }
         }
     }
 
@@ -201,8 +327,11 @@ public sealed class UpdateService : IDisposable
         }
 
         _busy = true;
+        _checkedThisSession = true;
         try
         {
+            // 確かめられなかったときは、前の状態を変えない
+            var before = _state.Stage;
             SetStage(UpdateStage.Checking);
 
             var wall = DateTimeOffset.UtcNow;
@@ -223,9 +352,11 @@ public sealed class UpdateService : IDisposable
                 Finish(wall, monotonic, accepted: null, UpdateStage.Idle, "公開されている安定版はまだありません");
                 return;
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or InvalidDataException)
+            catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException or InvalidDataException)
             {
-                Finish(wall, monotonic, accepted: null, UpdateStage.Idle, "確認できませんでした。回線の状態を確かめてください");
+                // タイムアウトは TaskCanceledException だけとは限らない。
+                // 書き込みの待ちの最中に切れると、基底の OperationCanceledException のまま来る
+                Finish(wall, monotonic, accepted: null, before, "確認できませんでした。回線の状態を確かめてください");
                 return;
             }
 
@@ -239,19 +370,51 @@ public sealed class UpdateService : IDisposable
                 Environment.OSVersion.Version.Build,
                 ProcessArch());
 
-            if (!result.HasUpdate)
+            if (result.Verdict == UpdateVerdict.NotNewer)
             {
+                // いまの版が追いついた。Releasesから手で入れた場合もここへ来る。
+                // 取ってあったものも、見つけてあった更新も、もう要らない
+                DropDownload();
+                _store.CleanExcept(null);
+                _available = null;
+                _pendingNotice = null;
                 Finish(wall, monotonic, result.Manifest?.GeneratedAt, UpdateStage.Idle, Describe(result));
                 return;
             }
 
+            if (!result.HasUpdate || result.Version is not { } version || result.Package is not { } package)
+            {
+                // 通らなかった確認では、前に検証を通したものを捨てない。
+                // 一時の不具合で、取ってあった更新を失わないようにする
+                Finish(wall, monotonic, result.Manifest?.GeneratedAt, before, Describe(result));
+                return;
+            }
+
             _available = result;
+            _state = UpdateLedger.RecordAvailable(_state, version.ToString(), package.Sha256);
+
+            // 狙いが変わったら、前に取ったものは使わない。
+            // 残すと、新しい版の名前で古い取得物を入れ、次の起動で失敗として数える
+            if (_download is not null && !_download.IsFor(version, package))
+            {
+                DropDownload();
+            }
+
+            if (_download is not null)
+            {
+                // もう手元にある。同じものを取り直さない
+                var ready = string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができています");
+                Finish(wall, monotonic, result.Manifest?.GeneratedAt, UpdateStage.Downloaded, ready);
+                SetNotice(ready);
+                return;
+            }
+
             Finish(
                 wall,
                 monotonic,
                 result.Manifest?.GeneratedAt,
                 UpdateStage.UpdateAvailable,
-                string.Create(CultureInfo.InvariantCulture, $"{result.Version} が出ています"));
+                string.Create(CultureInfo.InvariantCulture, $"{version} が出ています"));
 
             await DownloadCoreAsync(manual: false).ConfigureAwait(true);
 
@@ -274,6 +437,10 @@ public sealed class UpdateService : IDisposable
     /// 送られてきた量がマニフェストの大きさを超えたら、そこで止める。
     /// 取得先を信用しているわけではない。正しさを担うのは署名とハッシュである。
     /// </para>
+    /// <para>
+    /// 同じ配布物が手元にあれば取り直さない。
+    /// 置いてあるものは、署名を通したマニフェストの値とハッシュで照らしてから使う。
+    /// </para>
     /// </remarks>
     private async Task DownloadCoreAsync(bool manual)
     {
@@ -282,28 +449,46 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
+        if (_download is not null && _download.IsFor(version, package))
+        {
+            _state = UpdateLedger.RecordDownloaded(_state);
+            Save(string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができています"));
+            return;
+        }
+
+        var fileName = ManifestVerifier.PackageFileName(package);
+
+        // 通信しないので、取得のゲートより先に見る。
+        // 前のプロセスが取ったものや、入れるのに失敗したものがここで見つかる
+        var reused = await Task.Run(() => _store.FindVerified(fileName, package.Size, package.Sha256)).ConfigureAwait(true);
+        if (reused is not null)
+        {
+            Adopt(reused, version, package, manual);
+            return;
+        }
+
         if (!manual)
         {
             var gate = UpdateGate.ForDownload(_state, UpdateEnvironment.Read(package.Size), DateTimeOffset.UtcNow);
             if (!gate.CanProceed)
             {
-                var stage = gate.Outcome == GateOutcome.Hold ? UpdateStage.DownloadHeld : UpdateStage.UpdateAvailable;
-                SetStage(stage, gate.Outcome == GateOutcome.Hold
+                _state = _state with
+                {
+                    Stage = gate.Outcome == GateOutcome.Hold ? UpdateStage.DownloadHeld : UpdateStage.UpdateAvailable,
+                };
+                Save(gate.Outcome == GateOutcome.Hold
                     ? UpdateGate.Describe(gate.Reason)
-                    : string.Create(CultureInfo.InvariantCulture, $"{version} が出ています。「今すぐ取得」で受け取れます"));
-                Notice?.Invoke(this, string.Create(CultureInfo.InvariantCulture, $"新しい版 {version} が出ています"));
+                    : string.Create(CultureInfo.InvariantCulture, $"{version} が出ています。取得は押したときだけ行います"));
+                SetNotice(string.Create(CultureInfo.InvariantCulture, $"新しい版 {version} が出ています"));
                 return;
             }
         }
 
         SetStage(UpdateStage.Downloading, string.Create(CultureInfo.InvariantCulture, $"{version} を取得しています"));
 
-        // 前に抱えていたものは手放してから掃除する。掴んだままだと消せない
-        _download?.Dispose();
-        _download = null;
+        // 狙いの違うものは使わない。途中で終わった取得の残りもここで消える
         _store.CleanExcept(null);
 
-        var fileName = Path.GetFileName(new Uri(package.Url).AbsolutePath);
         UpdateDownload? download = null;
         try
         {
@@ -321,30 +506,44 @@ public sealed class UpdateService : IDisposable
 
             download.Hold();
 
+            // 200MB近くのハッシュはUIのスレッドで取らない。掴んだハンドル越しに測ることは変わらない
+            var held = download;
+            var sha256 = await Task.Run(held.ComputeSha256).ConfigureAwait(true);
             if (download.Length != package.Size ||
-                !string.Equals(download.ComputeSha256(), package.Sha256, StringComparison.Ordinal))
+                !string.Equals(sha256, package.Sha256, StringComparison.Ordinal))
             {
                 download.Dispose();
                 FailDownload(version, package, "取得したファイルがマニフェストと一致しません。破損か改ざんの可能性があります");
                 return;
             }
 
-            _download = download;
+            Adopt(download, version, package, manual);
             download = null;
-
-            _state = _state with { Stage = UpdateStage.Downloaded };
-            Save(string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができました"));
-            Notice?.Invoke(this, string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができました"));
-
-            if (!manual && _state.Mode == UpdateMode.Automatic)
-            {
-                InstallReady?.Invoke(this, EventArgs.Empty);
-            }
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException or UnauthorizedAccessException or InvalidDataException)
         {
+            // タイムアウトは TaskCanceledException だけとは限らない。
+            // 書き込みの待ちの最中に切れると、基底の OperationCanceledException のまま来る
             download?.Dispose();
             FailDownload(version, package, "取得できませんでした。あとで試し直します");
+        }
+    }
+
+    /// <summary>検証を通った取得物を、インストールに使うものとして抱える。</summary>
+    private void Adopt(UpdateDownload file, SemanticVersion version, UpdatePackage package, bool manual)
+    {
+        DropDownload();
+        _download = new DownloadedUpdate(file, version, package);
+        _store.CleanExcept(file.Id);
+
+        _state = UpdateLedger.RecordDownloaded(_state);
+        var message = string.Create(CultureInfo.InvariantCulture, $"{version} の準備ができました");
+        Save(message);
+        SetNotice(message);
+
+        if (!manual && _state.Mode == UpdateMode.Automatic)
+        {
+            InstallReady?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -365,10 +564,14 @@ public sealed class UpdateService : IDisposable
     /// </remarks>
     public string? TryInstall(bool manual)
     {
-        if (_download is null || _available?.Version is not { } version || _available.Package is not { } package)
+        // 版とSHA-256は取得物の側から取る。見つけた版の側から取ると、新しい版が出た直後に食い違う
+        if (_download is not { } download)
         {
             return "取得済みの更新がありません";
         }
+
+        var version = download.Version;
+        var package = download.Package;
 
         var installDirectory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
         if (!File.Exists(Path.Combine(installDirectory, "unins000.exe")))
@@ -381,8 +584,17 @@ public sealed class UpdateService : IDisposable
             var gate = UpdateGate.ForInstall(_state, UpdateEnvironment.Read(0), DateTimeOffset.UtcNow);
             if (!gate.CanProceed)
             {
-                return gate.Outcome == GateOutcome.Hold ? UpdateGate.Describe(gate.Reason) : "押されるのを待っています";
+                if (gate.Outcome != GateOutcome.Hold)
+                {
+                    return "押されるのを待っています";
+                }
+
+                // 理由を残す。黙って戻ると「なぜ入らないのか」が分からない
+                HoldInstall(gate.Reason);
+                return LastMessage;
             }
+
+            _autoInstallAttempted = true;
         }
 
         var logPath = Path.Combine(
@@ -411,11 +623,12 @@ public sealed class UpdateService : IDisposable
         try
         {
             // インストール先を作業ディレクトリにしない。そこにハンドルが張られる
-            Process.Start(new ProcessStartInfo(_download.Path, arguments)
+            Process.Start(new ProcessStartInfo(download.File.Path, arguments)
             {
                 UseShellExecute = false,
-                WorkingDirectory = _download.Directory,
+                WorkingDirectory = download.File.Directory,
             });
+            _pendingNotice = null;
             return null;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or FileNotFoundException)
@@ -445,6 +658,7 @@ public sealed class UpdateService : IDisposable
     /// <remarks>割り込んだ回数だけを数える。トレイに出しただけのものは数えない。</remarks>
     public void RecordPrompt()
     {
+        _pendingNotice = null;
         _state = UpdatePrompt.RecordToast(_state, DateTimeOffset.UtcNow);
         UpdateStateStore.Save(_state);
     }
@@ -459,6 +673,39 @@ public sealed class UpdateService : IDisposable
         return string.Create(
             CultureInfo.InvariantCulture,
             $"更新: いまの版 {Running} / {_state.Stage} / {LastMessage} / 最後に確認 {checkedAt} / 確認先 {_manifestUrl}");
+    }
+
+    /// <summary>
+    /// 知らせを渡し、出されるまで持っておく。
+    /// </summary>
+    /// <remarks>
+    /// 割り込むかは受け取った側が <see cref="DecidePrompt"/> で決める。
+    /// 割り込んだら <see cref="RecordPrompt"/> が消す。割り込まなければ、tick のたびに渡し直す。
+    /// </remarks>
+    private void SetNotice(string message)
+    {
+        _pendingNotice = message;
+        Notice?.Invoke(this, message);
+    }
+
+    /// <summary>自動のインストールを見送ったことと、その理由を残す。</summary>
+    private void HoldInstall(UpdateHoldReason reason)
+    {
+        var text = UpdateGate.Describe(reason);
+        if (_state.Stage == UpdateStage.InstallHeld && string.Equals(text, LastMessage, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _state = _state with { Stage = UpdateStage.InstallHeld };
+        Save(text);
+    }
+
+    /// <summary>抱えていた取得物を手放す。ファイルは消さない。</summary>
+    private void DropDownload()
+    {
+        _download?.File.Dispose();
+        _download = null;
     }
 
     private void FailDownload(SemanticVersion version, UpdatePackage package, string message)
@@ -582,7 +829,24 @@ public sealed class UpdateService : IDisposable
 
         _disposed = true;
         _tick.Stop();
-        _download?.Dispose();
+        DropDownload();
         _http.Dispose();
+    }
+
+    /// <summary>
+    /// 取得して検証を通したものと、それがどの配布物のものか。
+    /// </summary>
+    /// <param name="File">掴んでいるファイル。</param>
+    /// <param name="Version">取得した版。</param>
+    /// <param name="Package">取得した配布物。</param>
+    /// <remarks>
+    /// 版とSHA-256を取得物の側に持たせる。
+    /// 見つけた版の側から引くと、新しい版が見つかった時点で、古い取得物に新しい版の名前が付く。
+    /// </remarks>
+    private sealed record DownloadedUpdate(UpdateDownload File, SemanticVersion Version, UpdatePackage Package)
+    {
+        /// <summary>指定の配布物のものか。</summary>
+        public bool IsFor(SemanticVersion version, UpdatePackage package) =>
+            Version == version && string.Equals(Package.Sha256, package.Sha256, StringComparison.Ordinal);
     }
 }
