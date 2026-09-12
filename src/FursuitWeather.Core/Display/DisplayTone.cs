@@ -39,10 +39,20 @@ public enum LevelTone
 /// </remarks>
 public static class DisplayTone
 {
-    /// <summary>低温の記号。</summary>
+    /// <summary>低温の印。</summary>
+    /// <remarks>本体のバッジが低温のときだけ前へ置く、温度計のアイコンに当たる。</remarks>
     public const string ColdSymbol = "❄";
 
-    /// <summary><c>grade</c> ごとの記号。本体の <c>GRADE_SYMBOLS</c> と同じ。</summary>
+    /// <summary>
+    /// <c>grade</c> ごとの記号。
+    /// </summary>
+    /// <remarks>
+    /// 本体の <c>GRADE_SYMBOLS</c> と同じ並びだが、<c>grade 4</c> だけ違う。
+    /// 本体は <c>ban</c> のアイコンを使い、<c>grade 3</c> と別の形にしている。
+    /// こちらはアイコンをまだ持たないため、どちらも「✕」になる。
+    /// 見分けはラベルの文字（厳重警戒と着用中止）が担う。
+    /// アイコンを入れる段階で分ける（<c>docs/open-questions.md</c>）。
+    /// </remarks>
     private static readonly string[] GradeSymbols = ["◎", "○", "△", "✕", "✕"];
 
     /// <summary>配色に使う低温か。</summary>
@@ -63,9 +73,17 @@ public static class DisplayTone
     /// <returns>記号。</returns>
     public static string GradeSymbol(int grade) => GradeSymbols[Math.Clamp(grade, 0, 4)];
 
-    /// <summary>配色の区分の記号を引く。</summary>
-    /// <param name="tone">配色の区分。</param>
-    /// <returns>記号。</returns>
-    public static string Symbol(LevelTone tone) =>
-        tone == LevelTone.Cold ? ColdSymbol : GradeSymbol((int)tone);
+    /// <summary>
+    /// バッジに出す記号を引く。
+    /// </summary>
+    /// <param name="level">レベルの名前。</param>
+    /// <param name="grade">深刻度。</param>
+    /// <returns>記号。低温なら印に <c>grade</c> の記号を添える。</returns>
+    /// <remarks>
+    /// <b>低温でも <c>grade</c> の記号を落とさない。</b>
+    /// 落とすと、低温の注意と警戒と危険が同じ記号になり、文字でしか見分けられなくなる。
+    /// 本体のバッジも、低温の印と <c>grade</c> の記号を並べている。
+    /// </remarks>
+    public static string Symbol(string? level, int grade) =>
+        IsColdLevel(level) ? ColdSymbol + GradeSymbol(grade) : GradeSymbol(grade);
 }

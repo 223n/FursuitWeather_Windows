@@ -33,15 +33,24 @@ public sealed class DisplayToneTests
     }
 
     [Theory]
-    [InlineData(LevelTone.Grade0, "◎")]
-    [InlineData(LevelTone.Grade1, "○")]
-    [InlineData(LevelTone.Grade2, "△")]
-    [InlineData(LevelTone.Grade3, "✕")]
-    [InlineData(LevelTone.Grade4, "✕")]
-    [InlineData(LevelTone.Cold, "❄")]
-    public void 記号を引く(LevelTone tone, string expected)
+    [InlineData("optimal", 0, "◎")]
+    [InlineData("caution", 1, "○")]
+    [InlineData("warning", 2, "△")]
+    [InlineData("severeWarning", 3, "✕")]
+    [InlineData("danger", 4, "✕")]
+    public void 記号を引く(string level, int grade, string expected)
     {
-        Assert.Equal(expected, DisplayTone.Symbol(tone));
+        Assert.Equal(expected, DisplayTone.Symbol(level, grade));
+    }
+
+    [Theory]
+    [InlineData("coldCaution", 1, "❄○")]
+    [InlineData("coldWarning", 2, "❄△")]
+    [InlineData("coldDanger", 4, "❄✕")]
+    public void 低温でもgradeの記号を落とさない(string level, int grade, string expected)
+    {
+        // 落とすと、低温の注意と警戒と危険が同じ記号になる。本体のバッジも両方を並べている
+        Assert.Equal(expected, DisplayTone.Symbol(level, grade));
     }
 
     [Fact]
