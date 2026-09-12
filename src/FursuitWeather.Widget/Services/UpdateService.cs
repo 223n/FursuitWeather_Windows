@@ -142,6 +142,29 @@ public sealed class UpdateService : IDisposable
     /// <summary>直近の結果を1行で。診断と設定画面に出す。</summary>
     public string LastMessage { get; private set; } = "まだ確認していません";
 
+    /// <summary>
+    /// いま掲示を出しているか。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 自動のインストールを保留するために使う。取得は止めない（<c>docs/display.md</c>）。
+    /// </para>
+    /// <para>
+    /// 全画面を「割り込んではいけない状態」と見なすかは、Windowsの判断に任せない。
+    /// 掲示中かどうかはアプリ自身が知っているため、それをゲートへ渡す。
+    /// </para>
+    /// </remarks>
+    public bool DisplayActive { get; set; }
+
+    /// <summary>
+    /// インストールを始めたときに掲示を出していたか。
+    /// </summary>
+    /// <remarks>
+    /// 起動したときの状態から読む。
+    /// <see cref="ReconcileAtStartup"/> はこの印を消すため、作るときに控えておく。
+    /// </remarks>
+    public bool ResumeDisplayRequested { get; }
+
     /// <summary>作る。</summary>
     /// <param name="manifestUrl">確認先。通常は <see cref="LatestManifestUrl"/>。</param>
     public UpdateService(string manifestUrl)
@@ -152,6 +175,7 @@ public sealed class UpdateService : IDisposable
         Running = ReadRunningVersion();
         _phase = DevicePhase();
         _state = UpdateStateStore.Load();
+        ResumeDisplayRequested = _state.ResumeDisplayAfterInstall;
 
         // 前のプロセスで確認していれば、「まだ確認していません」とは出さない。
         // 最後に確認した日時と食い違って見える
@@ -422,7 +446,7 @@ public sealed class UpdateService : IDisposable
             _state.Mode == UpdateMode.Automatic &&
             _state.Stage is UpdateStage.Downloaded or UpdateStage.InstallHeld)
         {
-            var gate = UpdateGate.ForInstall(_state, UpdateEnvironment.Read(0), now);
+            var gate = UpdateGate.ForInstall(_state, InstallConditions(), now);
             if (gate.CanProceed)
             {
                 InstallReady?.Invoke(this, EventArgs.Empty);
@@ -723,7 +747,7 @@ public sealed class UpdateService : IDisposable
 
         if (!manual)
         {
-            var gate = UpdateGate.ForInstall(_state, UpdateEnvironment.Read(0), DateTimeOffset.UtcNow);
+            var gate = UpdateGate.ForInstall(_state, InstallConditions(), DateTimeOffset.UtcNow);
             if (!gate.CanProceed)
             {
                 if (gate.Outcome != GateOutcome.Hold)
@@ -754,7 +778,12 @@ public sealed class UpdateService : IDisposable
         // 狙いは起動より前に書く。書けなければ進まない。
         // 書けないまま起動すると、次の起動で成否を確定できない
         var previous = _state;
-        var next = UpdateLedger.BeginInstall(UpdateLedger.AcknowledgeInterruption(_state), version.ToString(), package.Sha256);
+        // 掲示中だったかも同じ書き込みで残す。起動し直したあと掲示へ戻すのに使う
+        var next = UpdateLedger.BeginInstall(
+            UpdateLedger.AcknowledgeInterruption(_state),
+            version.ToString(),
+            package.Sha256,
+            DisplayActive);
         if (!UpdateStateStore.Save(next))
         {
             return "状態を保存できなかったため、インストールを中止しました";
@@ -873,6 +902,11 @@ public sealed class UpdateService : IDisposable
     }
 
     /// <summary>自動のインストールを見送ったことと、その理由を残す。</summary>
+    /// <summary>インストールのゲートへ渡す、いまの様子。</summary>
+    /// <returns>端末の様子に「掲示中」を加えたもの。</returns>
+    private UpdateConditions InstallConditions() =>
+        UpdateEnvironment.Read(0) with { DisplayActive = DisplayActive };
+
     private void HoldInstall(UpdateHoldReason reason)
     {
         var text = UpdateGate.Describe(reason);

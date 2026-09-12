@@ -72,6 +72,15 @@ public sealed record WidgetSettings
     /// <summary>Windowsへサインインしたときに自動で起動するか。</summary>
     public bool StartWithWindows { get; init; }
 
+    /// <summary>
+    /// 起動したら掲示で始めるか。
+    /// </summary>
+    /// <remarks>
+    /// 会場の専用端末で、停電や再起動のあとに人の手を借りずに掲示へ戻すための設定である。
+    /// 起動の引数には頼らない。自動起動も、更新のあとの起動し直しも、引数を渡さないためである。
+    /// </remarks>
+    public bool StartInDisplay { get; init; }
+
     /// <summary>設定を置くディレクトリ。</summary>
     public static string Directory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

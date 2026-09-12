@@ -12,7 +12,12 @@ namespace FursuitWeather.Widget.Services;
 /// <param name="Message">出そうとした内容。</param>
 /// <param name="At">出そうとした時刻。</param>
 /// <param name="Shown">トーストとして出せたか。</param>
-public sealed record NotificationAttempt(NotificationMessage Message, DateTimeOffset At, bool Shown);
+/// <param name="Suppressed">掲示中のため、出さずに止めたか。</param>
+public sealed record NotificationAttempt(
+    NotificationMessage Message,
+    DateTimeOffset At,
+    bool Shown,
+    bool Suppressed = false);
 
 /// <summary>
 /// 取得した予報から通知を出し、判断に使う状態を保存する。
@@ -43,6 +48,25 @@ public sealed class NotificationDispatcher
 
     /// <summary>通知を出す設定になっているか。</summary>
     public bool Enabled { get; set; }
+
+    /// <summary>
+    /// 掲示中のため、組み上がった文面を出さずに止めるか。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>判定と保存は止めない。</b>
+    /// 掲示が同じ判定を画面に出し続けているため、状態は掲示の外と同じように進める
+    /// （<c>docs/display.md</c>）。
+    /// </para>
+    /// <para>
+    /// 止めたぶんは「出せなかった通知」として扱わない。
+    /// 小窓とトレイのバルーンへ倒すと、来場者の見る画面にバルーンが出る。
+    /// </para>
+    /// <para>
+    /// 設定で通知を切っているときは、そちらが優先される。判定も保存も行わない。
+    /// </para>
+    /// </remarks>
+    public bool Suppressed { get; set; }
 
     /// <summary>直近に出そうとした通知。新しいものが後ろに来る。</summary>
     public IReadOnlyList<NotificationAttempt> Attempts => _attempts;
@@ -109,6 +133,20 @@ public sealed class NotificationDispatcher
             _lastOutcome = string.Create(
                 CultureInfo.InvariantCulture,
                 $"{JstTime.ToLocal(now):H時m分} に判定しました。出すものはありませんでした");
+            return;
+        }
+
+        if (Suppressed)
+        {
+            // 出さずに止める。履歴には残るため、1日の上限と同種の間隔には数えられる
+            foreach (var message in plan.Messages)
+            {
+                Remember(new NotificationAttempt(message, now, Shown: false, Suppressed: true));
+            }
+
+            _lastOutcome = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{JstTime.ToLocal(now):H時m分} に{plan.Messages.Count}件（掲示中のため出していません）");
             return;
         }
 
@@ -236,9 +274,10 @@ public sealed class NotificationDispatcher
             lines.Add("直近に出そうとした通知:");
             foreach (var attempt in _attempts.AsEnumerable().Reverse())
             {
+                var how = attempt.Suppressed ? "掲示中で出さず" : attempt.Shown ? "トースト" : "出せず";
                 lines.Add(string.Create(
                     CultureInfo.InvariantCulture,
-                    $"  {JstTime.ToLocal(attempt.At):M/d H:mm} [{(attempt.Shown ? "トースト" : "出せず")}] {attempt.Message.Describe()}"));
+                    $"  {JstTime.ToLocal(attempt.At):M/d H:mm} [{how}] {attempt.Message.Describe()}"));
             }
         }
 

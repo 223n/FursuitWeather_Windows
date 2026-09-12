@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window
         LatitudeBox.Text = settings.Latitude.ToString("0.####", CultureInfo.InvariantCulture);
         LongitudeBox.Text = settings.Longitude.ToString("0.####", CultureInfo.InvariantCulture);
         PlaceBox.Text = settings.PlaceName;
+        StartInDisplayCheck.IsChecked = settings.StartInDisplay;
 
         LayerTopRadio.IsChecked = settings.Layer == WindowLayer.AlwaysOnTop;
         LayerNormalRadio.IsChecked = settings.Layer == WindowLayer.Normal;
@@ -203,6 +204,7 @@ public partial class SettingsWindow : Window
             Layer = ReadLayer(),
             NotificationsEnabled = NotificationsCheck.IsChecked == true,
             StartWithWindows = startup,
+            StartInDisplay = StartInDisplayCheck.IsChecked == true,
         };
 
         Result.Save();
