@@ -307,7 +307,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
     /// 手元に1件も無いときにだけ出す。
     /// 取り直しに失敗しても前回の都市を出し続けるため、文面は取得できていないことだけを言う。
     /// </remarks>
-    public static string EmptyNational => "全国の天気を取得できていません";
+    public string EmptyNational { get; } = "全国の天気を取得できていません";
 
     /// <summary>巡回を止めているか。</summary>
     public bool IsPaused
@@ -344,7 +344,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
     ];
 
     /// <summary>詳しい手順への案内。</summary>
-    public static string EmergencyLink => EmergencySteps.MoreInfo;
+    public string EmergencyLink { get; } = EmergencySteps.MoreInfo;
 
     /// <summary>出しているスライドを切り替える。</summary>
     /// <param name="slide">出すスライド。</param>

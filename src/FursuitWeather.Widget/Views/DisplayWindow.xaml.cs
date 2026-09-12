@@ -49,6 +49,7 @@ internal sealed partial class DisplayWindow : Window
     private TimeSpan _lastActivity;
     private (int X, int Y) _shift = (0, 0);
     private int _fade;
+    private bool _operatorWindow = true;
     private bool _emergency;
     private bool _controlsVisible;
     private bool _closing;
@@ -179,7 +180,10 @@ internal sealed partial class DisplayWindow : Window
 
         _viewModel.IsPaused = _rotation.IsPaused;
 
-        if (monotonic - _lastRedraw >= RedrawInterval)
+        // 運営者向けの注意は60秒で消す。1分ごとの描き直しに任せると、最長で倍まで残る
+        var expired = _operatorWindow && monotonic - _startedAt >= DisplayBand.OperatorNoticeLifetime;
+
+        if (expired || monotonic - _lastRedraw >= RedrawInterval)
         {
             Redraw();
         }
@@ -192,10 +196,10 @@ internal sealed partial class DisplayWindow : Window
         _lastRedraw = Monotonic();
 
         // 掲示に入ってから60秒のあいだだけ、運営者向けの注意を出す
-        var operatorWindow = Monotonic() - _startedAt < DisplayBand.OperatorNoticeLifetime;
+        _operatorWindow = Monotonic() - _startedAt < DisplayBand.OperatorNoticeLifetime;
         var inputs = _inputs with
         {
-            Notices = _inputs.Notices with { OperatorWindow = operatorWindow },
+            Notices = _inputs.Notices with { OperatorWindow = _operatorWindow },
         };
 
         _viewModel.Apply(inputs, now);
