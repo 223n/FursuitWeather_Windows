@@ -1109,7 +1109,8 @@ public partial class WidgetWindow : Window, IDisposable
         // 小窓を元の設定どおりに戻す
         ApplyLayer();
 
-        if (_heldUpdateNotice is { } held)
+        // 終わりかけなら出さない。終了の途中でトーストを出しても読めない
+        if (_heldUpdateNotice is { } held && !_teardown && !_closed)
         {
             _heldUpdateNotice = null;
             OnUpdateNotice(held);
