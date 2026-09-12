@@ -26,17 +26,47 @@ public sealed class ForecastViewTests
     }
 
     [Fact]
-    public void 欠測で歯抜けになっていても添字に頼らない()
+    public void いまの時間が欠測なら当日の直近の未来へ落とす()
     {
-        // 10時が欠測で配列から落ちている。添字で数えると11時を10時とみなしてしまう
-        var forecast = WithHours("2026-08-15T09:00", "2026-08-15T11:00", "2026-08-15T12:00");
+        // 10時が欠測で配列から落ちている。
+        // 本体の pickCurrentHour と同じく、過ぎた9時ではなく11時を選ぶ
+        var forecast = WithHours("2026-08-15T09:00", "2026-08-15T12:00", "2026-08-15T11:00");
         var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
 
         var hour = ForecastView.SelectCurrentHour(forecast, now);
 
         Assert.NotNull(hour);
-        // 直前の時間へ落ちる。11時を先取りしない
-        Assert.Equal("2026-08-15T09:00", hour.Time);
+        Assert.Equal("2026-08-15T11:00", hour.Time);
+    }
+
+    [Fact]
+    public void 未来の行が並びの後ろにあっても直近を選ぶ()
+    {
+        // 最後に見た未来の行ではなく、いちばん近い未来の行を選ぶ
+        var forecast = WithHours("2026-08-15T11:00", "2026-08-15T13:00", "2026-08-15T12:00");
+        var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
+
+        Assert.Equal("2026-08-15T11:00", ForecastView.SelectCurrentHour(forecast, now)?.Time);
+    }
+
+    [Fact]
+    public void 過ぎた時間へは落とさない()
+    {
+        // すでに過ぎた時間を「いま」として掲げない
+        var forecast = WithHours("2026-08-15T08:00", "2026-08-15T09:00");
+        var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
+
+        Assert.Null(ForecastView.SelectCurrentHour(forecast, now));
+    }
+
+    [Fact]
+    public void 日付をまたいだ先の行は選ばない()
+    {
+        // 23時が欠測でも、翌日の0時を今日の「いま」にしない
+        var forecast = WithHours("2026-08-15T22:00", "2026-08-16T00:00");
+        var now = JstTime.ToInstant("2026-08-15T23:30")!.Value;
+
+        Assert.Null(ForecastView.SelectCurrentHour(forecast, now));
     }
 
     [Fact]
@@ -64,12 +94,40 @@ public sealed class ForecastViewTests
     }
 
     [Fact]
-    public void まだ始まっていない予報では選べない()
+    public void 当日の行が無ければ選べない()
     {
-        var forecast = WithHours("2026-08-15T12:00", "2026-08-15T13:00");
+        var forecast = WithHours("2026-08-16T10:00", "2026-08-16T11:00");
         var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
 
         Assert.Null(ForecastView.SelectCurrentHour(forecast, now));
+    }
+
+    [Fact]
+    public void まだ始まっていない当日の予報なら直近の行を選ぶ()
+    {
+        var forecast = WithHours("2026-08-15T13:00", "2026-08-15T12:00");
+        var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
+
+        var hour = ForecastView.SelectCurrentHour(forecast, now);
+
+        Assert.NotNull(hour);
+        Assert.Equal("2026-08-15T12:00", hour.Time);
+    }
+
+    [Fact]
+    public void 同じ時間の行が2つあれば先のものを選ぶ()
+    {
+        var forecast = new ForecastResponse
+        {
+            Hours =
+            [
+                new HourForecast { Time = "2026-08-15T10:00", WeatherLabel = "先" },
+                new HourForecast { Time = "2026-08-15T10:00", WeatherLabel = "後" },
+            ],
+        };
+        var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;
+
+        Assert.Equal("先", ForecastView.SelectCurrentHour(forecast, now)?.WeatherLabel);
     }
 
     [Fact]

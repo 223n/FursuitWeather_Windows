@@ -68,6 +68,15 @@ public sealed record UpdateConditions
 
     /// <summary>アプリが起動してからの時間。</summary>
     public TimeSpan Uptime { get; init; }
+
+    /// <summary>
+    /// 掲示モードのあいだか。
+    /// </summary>
+    /// <remarks>
+    /// 全画面の掲示の窓を、Windowsが「割り込んではいけない状態」と見なすかに任せない。
+    /// アプリ自身が知っている状態をそのまま渡す。
+    /// </remarks>
+    public bool DisplayActive { get; init; }
 }
 
 /// <summary>
@@ -190,6 +199,12 @@ public static class UpdateGate
             return GateDecision.Hold(UpdateHoldReason.AutoUpdateDisabled);
         }
 
+        // 掲示を途切れさせない。掲示を終えたら、1分ごとの見直しが拾う
+        if (conditions.DisplayActive)
+        {
+            return GateDecision.Hold(UpdateHoldReason.DisplayActive);
+        }
+
         if (!conditions.AcceptsNotifications)
         {
             return GateDecision.Hold(UpdateHoldReason.DoNotDisturb);
@@ -233,6 +248,7 @@ public static class UpdateGate
         UpdateHoldReason.RetryBackoff => "続けて失敗したため、次に試すまで待っています。",
         UpdateHoldReason.AutoUpdateDisabled => "続けて失敗したため、自動での更新を止めています。手で入れ直してください。",
         UpdateHoldReason.InterruptedInstall => "前回のインストールが途中で終わっています。実行する前に確かめてください。",
+        UpdateHoldReason.DisplayActive => "掲示のあいだは、インストールを見送っています。掲示を終えたときに入れます。",
         _ => "自動での更新を見送っています。",
     };
 }

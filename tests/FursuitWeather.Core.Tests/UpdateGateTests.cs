@@ -265,6 +265,44 @@ public sealed class UpdateGateTests
     }
 
     [Fact]
+    public void 掲示のあいだは自動でインストールしない()
+    {
+        // 全画面の掲示をWindowsがどう見なすかに任せず、アプリが知っている状態で止める
+        var decision = UpdateGate.ForInstall(State(), Conditions() with { DisplayActive = true }, Now);
+
+        Assert.Equal(GateOutcome.Hold, decision.Outcome);
+        Assert.Equal(UpdateHoldReason.DisplayActive, decision.Reason);
+        Assert.Contains("掲示", UpdateGate.Describe(decision.Reason), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 掲示のあいだでも取得は止めない()
+    {
+        var decision = UpdateGate.ForDownload(State(), Conditions() with { DisplayActive = true }, Now);
+
+        Assert.True(decision.CanProceed);
+    }
+
+    [Fact]
+    public void 前回の中断は掲示より先に見る()
+    {
+        var decision = UpdateGate.ForInstall(State(interrupted: true), Conditions() with { DisplayActive = true }, Now);
+
+        Assert.Equal(UpdateHoldReason.InterruptedInstall, decision.Reason);
+    }
+
+    [Fact]
+    public void 取得だけ自動なら掲示のあいだも押されるのを待つ()
+    {
+        var decision = UpdateGate.ForInstall(
+            State(mode: UpdateMode.DownloadOnly),
+            Conditions() with { DisplayActive = true },
+            Now);
+
+        Assert.Equal(GateOutcome.WaitForUser, decision.Outcome);
+    }
+
+    [Fact]
     public void 取得だけ自動ならインストールで利用者を待つ()
     {
         var decision = UpdateGate.ForInstall(State(UpdateMode.DownloadOnly), Conditions(), Now);

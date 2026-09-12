@@ -116,4 +116,7 @@ public enum UpdateHoldReason
 
     /// <summary>前回のインストールが途中で終わっており、確認を待っている。</summary>
     InterruptedInstall,
+
+    /// <summary>掲示モードのあいだ。掲示を終えたときに入れる。</summary>
+    DisplayActive,
 }
