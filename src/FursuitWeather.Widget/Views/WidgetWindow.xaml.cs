@@ -1079,8 +1079,8 @@ public partial class WidgetWindow : Window, IDisposable
         ApplyLayer();
         UpdateDisplayMenu();
 
-        // 掲示先のモニターを選ぶのは設定画面の役で、いまはまだ無い。主モニターへ出す
-        window.ShowOn(null);
+        // 選んでいなければ主モニターへ出す
+        window.ShowOn(_settings.DisplayMonitorId);
         PushDisplay();
     }
 

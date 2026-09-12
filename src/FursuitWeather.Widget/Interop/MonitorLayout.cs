@@ -41,10 +41,19 @@ internal sealed record MonitorTarget(
 /// コールバックを渡す形は <c>LibraryImport</c> と噛み合わないためである。
 /// <c>EnumDisplayDevices</c> と <c>EnumDisplaySettings</c> で、識別の値と位置と大きさが揃う。
 /// </para>
+/// <para>
+/// <b>モニターの側を読めないことがある。</b>
+/// 作業に使った端末では、アダプターの下のモニターが1台も返らなかった。
+/// そのときは識別の値がアダプターの名前になり、抜き差しで入れ替わりうる。
+/// 名前も「モニター1」のような番号だけの表記へ落とす（<c>docs/display.md</c>）。
+/// </para>
 /// </remarks>
 internal static partial class MonitorLayout
 {
     private const int EnumCurrentSettings = -1;
+
+    /// <summary>アダプターの名前の接頭辞。番号だけを取り出すのに使う。</summary>
+    private const string AdapterPrefix = @"\\.\DISPLAY";
 
     /// <summary>モニターの識別の値（<c>\\?\DISPLAY#...</c>）を受け取る。</summary>
     private const uint EddGetDeviceInterfaceName = 0x0000_0001;
@@ -161,12 +170,19 @@ internal static partial class MonitorLayout
             var hasMonitor = EnumDisplayDevices(adapter.DeviceName, 0, ref monitor, EddGetDeviceInterfaceName);
 
             var id = hasMonitor && !string.IsNullOrEmpty(monitor.DeviceId) ? monitor.DeviceId : adapter.DeviceName;
-            var name = hasMonitor && !string.IsNullOrEmpty(monitor.DeviceString) ? monitor.DeviceString : adapter.DeviceString;
+
+            // モニターの名前を読めないときは、アダプターの名前（GPUの名前）を出さない。
+            // 2枚つないでいると、どちらも同じ文字になって選べなくなる
+            var name = hasMonitor && !string.IsNullOrEmpty(monitor.DeviceString)
+                ? monitor.DeviceString
+                : $"モニター{adapter.DeviceName.Replace(AdapterPrefix, string.Empty, StringComparison.Ordinal)}";
+
+            var primary = (adapter.StateFlags & PrimaryDevice) != 0;
 
             targets.Add(new MonitorTarget(
                 id,
-                $"{name}（{mode.PelsWidth}×{mode.PelsHeight}）",
-                (adapter.StateFlags & PrimaryDevice) != 0,
+                $"{name}（{mode.PelsWidth}×{mode.PelsHeight}{(primary ? "・主" : string.Empty)}）",
+                primary,
                 mode.PositionX,
                 mode.PositionY,
                 (int)mode.PelsWidth,

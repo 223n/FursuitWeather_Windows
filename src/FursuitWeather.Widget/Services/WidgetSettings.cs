@@ -73,6 +73,15 @@ public sealed record WidgetSettings
     public bool StartWithWindows { get; init; }
 
     /// <summary>
+    /// 掲示を出すモニターの識別の値。選んでいなければ null。
+    /// </summary>
+    /// <remarks>
+    /// 見つからないときは主モニターへ出し、掲示の画面に注意を出す。
+    /// 値の作り方は <c>MonitorLayout</c> にある。
+    /// </remarks>
+    public string? DisplayMonitorId { get; init; }
+
+    /// <summary>
     /// 起動したら掲示で始めるか。
     /// </summary>
     /// <remarks>
