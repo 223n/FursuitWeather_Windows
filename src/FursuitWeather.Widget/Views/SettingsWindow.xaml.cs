@@ -1,11 +1,25 @@
 using System.Globalization;
+using System.Net.Http;
 using System.Windows;
+using System.Windows.Input;
 using FursuitWeather.Core.Api;
+using FursuitWeather.Core.Models;
 using FursuitWeather.Core.Time;
 using FursuitWeather.Core.Update;
+using FursuitWeather.Widget.Interop;
 using FursuitWeather.Widget.Services;
 
 namespace FursuitWeather.Widget.Views;
+
+/// <summary>地点の検索の候補を、一覧へ出す形にしたもの。</summary>
+/// <param name="Label">一覧に出す名前。</param>
+/// <param name="Result">選ばれたときに使う候補。</param>
+internal sealed record LocationChoice(string Label, GeocodeResult Result);
+
+/// <summary>掲示を出すモニターの選択肢。</summary>
+/// <param name="Label">一覧に出す名前。</param>
+/// <param name="Id">識別の値。主モニターに任せるなら null。</param>
+internal sealed record MonitorChoiceItem(string Label, string? Id);
 
 /// <summary>設定の画面。</summary>
 /// <remarks>
@@ -22,6 +36,9 @@ public partial class SettingsWindow : Window
 {
     private readonly WidgetSettings _original;
     private readonly UpdateService? _updates;
+    private HttpClient? _http;
+    private FursuitWeatherClient? _client;
+    private bool _pickedFromSearch;
 
     /// <summary>保存されたあとの設定。「やめる」で閉じたときは null。</summary>
     public WidgetSettings? Result { get; private set; }
@@ -45,6 +62,7 @@ public partial class SettingsWindow : Window
         LongitudeBox.Text = settings.Longitude.ToString("0.####", CultureInfo.InvariantCulture);
         PlaceBox.Text = settings.PlaceName;
         StartInDisplayCheck.IsChecked = settings.StartInDisplay;
+        FillMonitors(settings.DisplayMonitorId);
 
         LayerTopRadio.IsChecked = settings.Layer == WindowLayer.AlwaysOnTop;
         LayerNormalRadio.IsChecked = settings.Layer == WindowLayer.Normal;
@@ -197,18 +215,143 @@ public partial class SettingsWindow : Window
             Longitude = coordinate.Longitude,
             PlaceName = place,
 
-            // 座標を入れ直して保存したときに立てる。
+            // 検索の候補を選んだときと、座標を入れ直して保存したときに立てる。
             // 保存しただけで立てると、地点に触れていない端末から
             // 「地点が設定されていません」の注意が消える
-            LocationChosen = _original.HasChosenLocation || HasMovedLocation(coordinate),
+            LocationChosen = _original.HasChosenLocation || _pickedFromSearch || HasMovedLocation(coordinate),
             Layer = ReadLayer(),
             NotificationsEnabled = NotificationsCheck.IsChecked == true,
             StartWithWindows = startup,
             StartInDisplay = StartInDisplayCheck.IsChecked == true,
+            DisplayMonitorId = (MonitorBox.SelectedItem as MonitorChoiceItem)?.Id,
         };
 
         Result.Save();
         DialogResult = true;
+    }
+
+    /// <summary>
+    /// つながっているモニターを一覧に入れる。
+    /// </summary>
+    /// <param name="chosenId">設定で選んであるモニター。選んでいなければ null。</param>
+    /// <remarks>
+    /// 選んであるモニターがいま見つからないときも、選択肢として残す。
+    /// 落とすと、抜き差しのあいだに設定を開いただけで掲示先が主モニターへ戻る。
+    /// </remarks>
+    private void FillMonitors(string? chosenId)
+    {
+        var items = new List<MonitorChoiceItem> { new("主モニター（既定）", null) };
+
+        foreach (var monitor in MonitorLayout.Enumerate())
+        {
+            items.Add(new MonitorChoiceItem(monitor.Name, monitor.Id));
+        }
+
+        if (!string.IsNullOrEmpty(chosenId) &&
+            !items.Any(item => string.Equals(item.Id, chosenId, StringComparison.OrdinalIgnoreCase)))
+        {
+            items.Add(new MonitorChoiceItem("選んだモニター（いま見つかりません）", chosenId));
+        }
+
+        MonitorBox.ItemsSource = items;
+        MonitorBox.SelectedItem = items.FirstOrDefault(item =>
+            string.Equals(item.Id, chosenId, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+    }
+
+    private void OnSearchKeyDown(object sender, KeyEventArgs e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            OnSearch(sender, new RoutedEventArgs());
+        }
+    }
+
+    /// <summary>
+    /// 地名か郵便番号で地点を探す。
+    /// </summary>
+    /// <remarks>
+    /// 利用者が押したときだけ呼ぶ。打つたびに呼ぶと、本体のAPIを無駄に叩く。
+    /// </remarks>
+    private async void OnSearch(object sender, RoutedEventArgs e)
+    {
+        var query = SearchBox.Text.Trim();
+        if (query.Length == 0)
+        {
+            ShowSearchState("探す言葉を入れてください。");
+            return;
+        }
+
+        if (query.Length > FursuitWeatherClient.MaxLocationQueryLength)
+        {
+            ShowSearchState("探す言葉が長すぎます。短くしてください。");
+            return;
+        }
+
+        _http ??= FursuitWeatherClient.CreateHttpClient();
+        _client ??= new FursuitWeatherClient(_http);
+
+        SearchButton.IsEnabled = false;
+        ShowSearchState("探しています…");
+        SearchResults.Visibility = Visibility.Collapsed;
+
+        try
+        {
+            var results = await _client.SearchLocationsAsync(query).ConfigureAwait(true);
+            if (results.Count == 0)
+            {
+                ShowSearchState("見つかりませんでした。別の言い方で試してください。");
+                return;
+            }
+
+            SearchResults.ItemsSource = results
+                .Select(result => new LocationChoice(result.DisplayName(), result))
+                .ToList();
+            SearchResults.SelectedItem = null;
+            SearchResults.Visibility = Visibility.Visible;
+            ShowSearchState("選ぶと、緯度と経度と表示名が入ります。");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            // 探せなくても設定は閉じない。手で座標を入れる道が残っている
+            ShowSearchState("探せませんでした。回線を確かめてから、もう一度試してください。");
+        }
+        finally
+        {
+            SearchButton.IsEnabled = true;
+        }
+    }
+
+    private void OnPickResult(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (SearchResults.SelectedItem is not LocationChoice choice)
+        {
+            return;
+        }
+
+        LatitudeBox.Text = choice.Result.Latitude.ToString("0.####", CultureInfo.InvariantCulture);
+        LongitudeBox.Text = choice.Result.Longitude.ToString("0.####", CultureInfo.InvariantCulture);
+        PlaceBox.Text = choice.Label;
+        _pickedFromSearch = true;
+
+        ShowSearchState($"{choice.Label} を入れました。保存すると切り替わります。");
+    }
+
+    private void ShowSearchState(string text)
+    {
+        SearchStateText.Text = text;
+        SearchStateText.Visibility = Visibility.Visible;
+    }
+
+    /// <inheritdoc />
+    protected override void OnClosed(EventArgs e)
+    {
+        _http?.Dispose();
+        _http = null;
+        _client = null;
+        base.OnClosed(e);
     }
 
     /// <summary>座標が、開いたときの値から変わったか。</summary>

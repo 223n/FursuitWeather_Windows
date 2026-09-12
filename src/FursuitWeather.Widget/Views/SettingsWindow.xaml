@@ -74,6 +74,39 @@
                            Foreground="#4A4A4A"
                            Text="座標は小数2桁（およそ1km四方）へ丸めてから送ります。本体の公開している約束に合わせるためです。" />
 
+                <!-- 地名か郵便番号で探す。押したときだけ本体のAPIを呼ぶ -->
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" KeyDown="OnSearchKeyDown" />
+                    <Button x:Name="SearchButton"
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Width="70"
+                            Height="24"
+                            Content="検索"
+                            Click="OnSearch" />
+                </Grid>
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="#4A4A4A"
+                           Text="地名か郵便番号で探せます（例: 松山、7900001）。郵便番号で引いた座標は、市区町村の代表点になることがあります。" />
+                <TextBlock x:Name="SearchStateText"
+                           Margin="0,4,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="#4A4A4A"
+                           Visibility="Collapsed" />
+                <ListBox x:Name="SearchResults"
+                         Margin="0,4,0,0"
+                         MaxHeight="110"
+                         DisplayMemberPath="Label"
+                         SelectionChanged="OnPickResult"
+                         Visibility="Collapsed" />
+
                 <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -143,12 +176,32 @@
                            Foreground="#4A4A4A"
                            Text="「設定」の「アプリ」の「スタートアップ」やタスクマネージャーからも切り替えられます。" />
 
+                <Separator Margin="0,16,0,12" />
+
+                <!-- 掲示モード。会場の専用端末で使う -->
+                <TextBlock Text="掲示（会場での全画面表示）" FontWeight="Bold" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="#4A4A4A"
+                           Text="トレイの「掲示を始める」から入ります。Escキーか Ctrl+Alt+D、トレイのメニューで終えられます。" />
+
                 <CheckBox x:Name="StartInDisplayCheck" Margin="0,10,0,0" Content="起動したら掲示で始める" />
                 <TextBlock Margin="24,2,0,0"
                            FontSize="11"
                            TextWrapping="Wrap"
                            Foreground="#4A4A4A"
-                           Text="会場の専用端末向けです。停電や再起動のあとも、人の手を借りずに掲示へ戻ります。掲示はEscキーか Ctrl+Alt+D、トレイのメニューで終えられます。" />
+                           Text="会場の専用端末向けです。停電や再起動のあとも、人の手を借りずに掲示へ戻ります。" />
+
+                <TextBlock Margin="0,10,0,0" Text="掲示を出すモニター" />
+                <ComboBox x:Name="MonitorBox"
+                          Margin="0,4,0,0"
+                          DisplayMemberPath="Label" />
+                <TextBlock Margin="0,2,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="#4A4A4A"
+                           Text="選んだモニターが見つからないときは、主モニターへ出して掲示の画面に注意を出します。" />
 
                 <!--
                     更新の扱い。文言は docs/update.md の「設定画面の文言」に合わせる。
