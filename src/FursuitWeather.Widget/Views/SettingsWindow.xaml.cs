@@ -195,6 +195,11 @@ public partial class SettingsWindow : Window
             Latitude = coordinate.Latitude,
             Longitude = coordinate.Longitude,
             PlaceName = place,
+
+            // 座標を入れ直して保存したときに立てる。
+            // 保存しただけで立てると、地点に触れていない端末から
+            // 「地点が設定されていません」の注意が消える
+            LocationChosen = _original.HasChosenLocation || HasMovedLocation(coordinate),
             Layer = ReadLayer(),
             NotificationsEnabled = NotificationsCheck.IsChecked == true,
             StartWithWindows = startup,
@@ -203,6 +208,13 @@ public partial class SettingsWindow : Window
         Result.Save();
         DialogResult = true;
     }
+
+    /// <summary>座標が、開いたときの値から変わったか。</summary>
+    /// <param name="coordinate">保存しようとしている座標。</param>
+    /// <returns>変わっていれば true。</returns>
+    private bool HasMovedLocation(Coordinate coordinate) =>
+        Math.Abs(coordinate.Latitude - _original.Latitude) > double.Epsilon ||
+        Math.Abs(coordinate.Longitude - _original.Longitude) > double.Epsilon;
 
     private void OnCancel(object sender, RoutedEventArgs e) => DialogResult = false;
 

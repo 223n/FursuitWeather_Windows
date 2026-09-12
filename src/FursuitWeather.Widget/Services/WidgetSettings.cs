@@ -21,13 +21,41 @@ namespace FursuitWeather.Widget.Services;
 public sealed record WidgetSettings
 {
     /// <summary>緯度。</summary>
-    public double Latitude { get; init; } = 35.68;
+    public double Latitude { get; init; } = DefaultLatitude;
 
     /// <summary>経度。</summary>
-    public double Longitude { get; init; } = 139.77;
+    public double Longitude { get; init; } = DefaultLongitude;
 
     /// <summary>地点の表示名。</summary>
     public string PlaceName { get; init; } = "東京駅の周辺";
+
+    /// <summary>
+    /// 利用者が地点を選んだか。
+    /// </summary>
+    /// <remarks>
+    /// この印を持たない前の版の設定では null になる。
+    /// 掲示は、選んでいない端末に「地点が設定されていません」と出す（<c>docs/display.md</c>）。
+    /// </remarks>
+    public bool? LocationChosen { get; init; }
+
+    /// <summary>
+    /// 地点を利用者が選んだとみなせるか。
+    /// </summary>
+    /// <remarks>
+    /// 印を持たない設定では、座標が既定値と違えば選んだものとみなす。
+    /// 前から地点を入れていた端末に、注意を誤って出さないためである。
+    /// </remarks>
+    [JsonIgnore]
+    public bool HasChosenLocation => LocationChosen ?? !IsDefaultCoordinate;
+
+    /// <summary>座標が既定値のままか。</summary>
+    [JsonIgnore]
+    private bool IsDefaultCoordinate =>
+        Math.Abs(Latitude - DefaultLatitude) < double.Epsilon &&
+        Math.Abs(Longitude - DefaultLongitude) < double.Epsilon;
+
+    private const double DefaultLatitude = 35.68;
+    private const double DefaultLongitude = 139.77;
 
     /// <summary>小窓の位置。まだ動かしていなければ null。</summary>
     public double? WindowLeft { get; init; }
@@ -100,6 +128,7 @@ public sealed record WidgetSettings
     /// <para>
     /// 座標を既定へ戻すときは表示名も戻す。
     /// 「札幌」と出したまま東京の判定を見せるほうが危ない。
+    /// 「利用者が選んだ」の印も落とす。落とさないと、掲示が既定の地点を選ばれたものとして掲げる。
     /// </para>
     /// </remarks>
     private static WidgetSettings Sanitize(WidgetSettings settings)
@@ -115,6 +144,7 @@ public sealed record WidgetSettings
             Latitude = fallback.Latitude,
             Longitude = fallback.Longitude,
             PlaceName = fallback.PlaceName,
+            LocationChosen = false,
         };
     }
 

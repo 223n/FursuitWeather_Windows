@@ -1,0 +1,502 @@
+<Window x:Class="FursuitWeather.Widget.Views.DisplayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="FursuitWeather 掲示"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource DisplayBackdrop}"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
+        Cursor="None"
+        FontFamily="Yu Gothic UI, Segoe UI, Meiryo"
+        SourceInitialized="OnSourceInitialized"
+        PreviewKeyDown="OnPreviewKeyDown"
+        MouseMove="OnMouseMove"
+        MouseLeftButtonUp="OnMouseLeftButtonUp">
+
+    <!--
+        1280×720で組み、Viewboxで画面へ拡大する。
+        文字の大きさはこの座標の上で決める。縦横の比が違う画面では、余りを地の色で塗る。
+    -->
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- 判定のバッジ。大きさは置き場所の FontSize から受け継ぐ -->
+        <DataTemplate x:Key="BadgeTemplate">
+            <Border Background="{Binding Surface}"
+                    BorderBrush="{Binding Accent}"
+                    BorderThickness="3"
+                    CornerRadius="8"
+                    Padding="10,2">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Symbol}"
+                               FontWeight="Bold"
+                               Foreground="{Binding Text}" />
+                    <TextBlock Text="{Binding Label}"
+                               Margin="8,0,0,0"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Foreground="{Binding Text}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="SlideNote" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="40" />
+            <Setter Property="Foreground" Value="{StaticResource DisplayMutedText}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+
+        <!--
+            こまの地。この後の予報、3日間、全国で共通にする。
+            中身は Viewbox で包む。注意が積み上がって場所が狭まったとき、
+            文字を縮めて収める。包まないと上下が切れて、都市名とバッジが消える
+        -->
+        <Style x:Key="Cell" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource DisplayCellSurface}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DisplaySubtleBorder}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Margin" Value="6" />
+            <Setter Property="Padding" Value="8,10" />
+        </Style>
+
+        <Style x:Key="ControlButton" TargetType="Button">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="Padding" Value="18,8" />
+            <Setter Property="Margin" Value="6,0" />
+            <Setter Property="Foreground" Value="{StaticResource DisplayText}" />
+            <Setter Property="Background" Value="{StaticResource DisplaySurface}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Viewbox Stretch="Uniform">
+            <Grid x:Name="Stage"
+                  Width="1280"
+                  Height="720"
+                  Background="{StaticResource DisplaySurface}">
+
+                <!-- 焼き付き対策のずらし。3分ごとに1ずつ4か所を巡る -->
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="Shift" />
+                </Grid.RenderTransform>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- 見出し。地点名と時計 -->
+                <Grid Grid.Row="0" Background="{StaticResource DisplayHeaderSurface}" Height="74">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="24,0">
+                        <TextBlock Text="着ぐるみ天気予報"
+                                   FontSize="22"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource DisplayHeaderText}" />
+                        <TextBlock Text="{Binding PlaceName}"
+                                   Margin="20,0,0,0"
+                                   FontSize="44"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource DisplayHeaderText}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ClockText}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="0,0,24,0"
+                               FontSize="44"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource DisplayHeaderText}" />
+                </Grid>
+
+                <!--
+                    いまの判定の帯。
+                    どのスライドを出していても、安全に関わる値が一目で伝わるようにする
+                -->
+                <Border Grid.Row="1"
+                        Height="92"
+                        BorderBrush="{StaticResource DisplaySubtleBorder}"
+                        BorderThickness="0,0,0,2">
+                    <Grid Margin="24,0">
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding HasNow, Converter={StaticResource BoolToVisibility}}">
+                            <ContentControl Content="{Binding NowBadge}"
+                                            ContentTemplate="{StaticResource BadgeTemplate}"
+                                            FontSize="40" />
+                            <TextBlock Text="{Binding NowMinutesText}"
+                                       Margin="24,0,0,0"
+                                       FontSize="40"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DisplayText}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding StripNote}"
+                                   VerticalAlignment="Center"
+                                   FontSize="34"
+                                   Foreground="{StaticResource DisplayMutedText}"
+                                   Visibility="{Binding MissingNow, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- この先3時間の先読み。掲示のあいだトーストを止める代わりに出す -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding HasLookahead, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="この先"
+                                       FontSize="26"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DisplayMutedText}" />
+                            <ContentControl Content="{Binding LookaheadBadge}"
+                                            ContentTemplate="{StaticResource BadgeTemplate}"
+                                            Margin="12,0,0,0"
+                                            FontSize="26" />
+                            <TextBlock Text="{Binding LookaheadText}"
+                                       Margin="12,0,0,0"
+                                       FontSize="26"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DisplayText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- 公式の発表と、積み上げる注意 -->
+                <StackPanel Grid.Row="2" Margin="24,8,24,0">
+                    <Border Background="{StaticResource Level3Surface}"
+                            BorderBrush="{StaticResource Level3Accent}"
+                            BorderThickness="3"
+                            CornerRadius="8"
+                            Padding="14,6"
+                            Margin="0,0,0,6"
+                            Visibility="{Binding HasAlert, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding AlertText}"
+                                   FontSize="26"
+                                   FontWeight="Bold"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource Level3Text}" />
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Notices}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource Level1Surface}"
+                                        BorderBrush="{StaticResource Level1Accent}"
+                                        BorderThickness="2"
+                                        CornerRadius="8"
+                                        Padding="14,4"
+                                        Margin="0,0,0,6">
+                                    <TextBlock Text="{Binding}"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource Level1Text}" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- スライド。切り替えのとき、この入れ物ごと透かす -->
+                <Grid x:Name="SlideHost" Grid.Row="3" Margin="24,10">
+
+                    <!-- いまの判定 -->
+                    <Grid Visibility="{Binding ShowNow, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    Visibility="{Binding HasNow, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding NowTimeLine}"
+                                       FontSize="40"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource DisplayText}" />
+                            <TextBlock Text="{Binding NowTemperature}"
+                                       FontSize="120"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource DisplayText}" />
+                            <TextBlock Text="{Binding NowAdvice}"
+                                       MaxWidth="1100"
+                                       Margin="0,6,0,0"
+                                       FontSize="30"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource DisplayText}" />
+                            <TextBlock Text="{Binding NowWbgtNote}"
+                                       Margin="0,10,0,0"
+                                       FontSize="26"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource DisplayMutedText}" />
+                            <TextBlock Text="{Binding NowExtraLine}"
+                                       Margin="0,4,0,0"
+                                       FontSize="24"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource DisplayMutedText}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding EmptyNow}"
+                                   Style="{StaticResource SlideNote}"
+                                   Visibility="{Binding MissingNow, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+
+                    <!-- この後の予報 -->
+                    <Grid Visibility="{Binding ShowHours, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding Hours}"
+                                      VerticalAlignment="Center"
+                                      Visibility="{Binding HasHours, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Cell}">
+                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Time}"
+                                                       FontSize="36"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <TextBlock Text="{Binding Weather}"
+                                                       Margin="0,6,0,0"
+                                                       FontSize="26"
+                                                       HorizontalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource DisplayMutedText}" />
+                                            <TextBlock Text="{Binding Temperature}"
+                                                       Margin="0,4,0,0"
+                                                       FontSize="46"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <ContentControl Content="{Binding Badge}"
+                                                            ContentTemplate="{StaticResource BadgeTemplate}"
+                                                            Margin="0,10,0,0"
+                                                            HorizontalAlignment="Center"
+                                                            FontSize="22" />
+                                        </StackPanel>
+                                        </Viewbox>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="{Binding EmptyHours}"
+                                   Style="{StaticResource SlideNote}"
+                                   Visibility="{Binding MissingHours, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+
+                    <!-- 3日間の天気 -->
+                    <Grid Visibility="{Binding ShowDays, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding Days}"
+                                      VerticalAlignment="Center"
+                                      Visibility="{Binding HasDays, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Cell}">
+                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Date}"
+                                                       FontSize="38"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <TextBlock Text="{Binding Weather}"
+                                                       Margin="0,8,0,0"
+                                                       FontSize="32"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayMutedText}" />
+                                            <TextBlock Text="{Binding Temperature}"
+                                                       Margin="0,6,0,0"
+                                                       FontSize="30"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <ContentControl Content="{Binding Badge}"
+                                                            ContentTemplate="{StaticResource BadgeTemplate}"
+                                                            Margin="0,12,0,0"
+                                                            HorizontalAlignment="Center"
+                                                            FontSize="26" />
+                                            <TextBlock Text="{Binding Laundry}"
+                                                       Margin="0,10,0,0"
+                                                       FontSize="24"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayMutedText}" />
+                                        </StackPanel>
+                                        </Viewbox>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="{Binding EmptyDays}"
+                                   Style="{StaticResource SlideNote}"
+                                   Visibility="{Binding MissingDays, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+
+                    <!-- 全国の天気 -->
+                    <Grid Visibility="{Binding ShowNational, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding Cities}"
+                                      Visibility="{Binding HasCities, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <!--
+                                        3列で並べる。都市が増えれば行が増える。
+                                        こまは横に長くなるため、中身も横に組む。
+                                        縦に積むと、高さに合わせて縮められて遠くから読めない
+                                    -->
+                                    <UniformGrid Columns="3" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Cell}">
+                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Width="110"
+                                                       FontSize="28"
+                                                       FontWeight="Bold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <TextBlock Text="{Binding Weather}"
+                                                       Width="96"
+                                                       FontSize="22"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource DisplayMutedText}" />
+                                            <TextBlock Text="{Binding Temperature}"
+                                                       Margin="6,0,0,0"
+                                                       FontSize="24"
+                                                       FontWeight="Bold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <ContentControl Content="{Binding Badge}"
+                                                            ContentTemplate="{StaticResource BadgeTemplate}"
+                                                            Margin="12,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            FontSize="20" />
+                                        </StackPanel>
+                                        </Viewbox>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="{Binding EmptyNational}"
+                                   Style="{StaticResource SlideNote}"
+                                   Visibility="{Binding MissingCities, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+
+                    <!-- もしものとき -->
+                    <Grid Visibility="{Binding ShowEmergency, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="もしものとき（熱中症の応急対応）"
+                                       FontSize="36"
+                                       FontWeight="Bold"
+                                       Margin="0,0,0,10"
+                                       Foreground="{StaticResource Level3Text}" />
+                            <ItemsControl ItemsSource="{Binding EmergencyItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Border Background="{StaticResource Level3Accent}"
+                                                    CornerRadius="18"
+                                                    Width="36"
+                                                    Height="36"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Number}"
+                                                           FontSize="22"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="White" />
+                                            </Border>
+                                            <TextBlock Text="{Binding Title}"
+                                                       Width="260"
+                                                       Margin="14,0,0,0"
+                                                       FontSize="30"
+                                                       FontWeight="Bold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                            <TextBlock Text="{Binding Detail}"
+                                                       Margin="10,0,0,0"
+                                                       FontSize="28"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource DisplayText}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding EmergencyLink}"
+                                       Margin="0,10,0,0"
+                                       FontSize="24"
+                                       Foreground="{StaticResource DisplayMutedText}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- 下の帯。鮮度と出典は常に見える位置へ置く -->
+                <Grid Grid.Row="4" Height="46" Margin="24,0">
+                    <TextBlock Text="{Binding AsOfText}"
+                               VerticalAlignment="Center"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource DisplayText}" />
+                    <TextBlock Text="{Binding AttributionText}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               FontSize="20"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource DisplayMutedText}" />
+                </Grid>
+            </Grid>
+        </Viewbox>
+
+        <!--
+            操作の帯。マウスを動かしたときだけ出す。
+            拡大の外に置く。画面の大きさが変わっても、押せる大きさを保つためである
+        -->
+        <Border x:Name="ControlBar"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Center"
+                Margin="0,0,0,40"
+                Padding="16,12"
+                CornerRadius="12"
+                Background="#E6FFFFFF"
+                BorderBrush="{StaticResource DisplaySubtleBorder}"
+                BorderThickness="2"
+                Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="{Binding PauseLabel}"
+                        Style="{StaticResource ControlButton}"
+                        Click="OnTogglePause" />
+                <Button Content="次へ"
+                        Style="{StaticResource ControlButton}"
+                        Click="OnNext" />
+                <Button Content="掲示を終える"
+                        Style="{StaticResource ControlButton}"
+                        Click="OnFinish" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

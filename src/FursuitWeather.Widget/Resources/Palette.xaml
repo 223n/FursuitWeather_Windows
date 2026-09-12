@@ -43,4 +43,20 @@
     <SolidColorBrush x:Key="CardText" Color="#1A1A1A" />
     <SolidColorBrush x:Key="CardMutedText" Color="#4A4A4A" />
 
+    <!--
+        掲示モードの地の色。
+        本体の public/style.css の共通トークンを写す。
+        会場で本体のWebの掲示の画面と並べたときに、同じ見た目になるようにする。
+    -->
+    <SolidColorBrush x:Key="DisplayHeaderSurface" Color="#0072B2" />
+    <SolidColorBrush x:Key="DisplayHeaderText" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DisplaySurface" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="DisplayText" Color="#1A1A1A" />
+    <SolidColorBrush x:Key="DisplayMutedText" Color="#555555" />
+    <SolidColorBrush x:Key="DisplayCellSurface" Color="#F6F4F1" />
+    <SolidColorBrush x:Key="DisplaySubtleBorder" Color="#DDD8D2" />
+
+    <!-- 画面の縦横の比が16対9でないときに余る帯。中身より暗くして境目を示す -->
+    <SolidColorBrush x:Key="DisplayBackdrop" Color="#101010" />
+
 </ResourceDictionary>

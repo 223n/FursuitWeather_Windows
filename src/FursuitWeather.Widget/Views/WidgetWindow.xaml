@@ -38,6 +38,9 @@
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="小窓の表示を切り替える" Click="OnToggleVisibility" />
+                    <MenuItem x:Name="DisplayItem"
+                              Header="掲示を始める"
+                              Click="OnToggleDisplay" />
                     <MenuItem Header="いま取り直す" Click="OnRefreshNow" />
                     <MenuItem Header="小窓の位置を戻す" Click="OnResetPosition" />
                     <Separator />

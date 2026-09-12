@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using FursuitWeather.Core.Api;
+using FursuitWeather.Core.Display;
 using FursuitWeather.Core.Notifications;
 using FursuitWeather.Widget.Interop;
 using FursuitWeather.Widget.Services;
@@ -38,6 +39,11 @@ public partial class WidgetWindow : Window, IDisposable
     private ClickThroughGuard? _clickThrough;
     private ForecastService? _service;
     private UpdateService? _updates;
+    private NationalService? _national;
+    private DisplayWindow? _display;
+    private bool _forecastFailed;
+    private bool _monitorMissing;
+    private bool _teardown;
     private SettingsWindow? _settingsWindow;
     private readonly ToastNotifier _toast = new();
     private readonly NotificationDispatcher _dispatcher;
@@ -140,6 +146,13 @@ public partial class WidgetWindow : Window, IDisposable
         if (args.Contains("--self-test-notification", StringComparer.Ordinal))
         {
             RunNotificationSelfTest();
+        }
+
+        // 掲示の見た目と巡回を、人が触らずに確かめるためのスイッチ。
+        // 起動したらそのまま掲示へ入る
+        if (args.Contains("--self-test-display", StringComparer.Ordinal))
+        {
+            Dispatcher.BeginInvoke(StartDisplay);
         }
 
         // 変化の検知から文面までの配線を、実データで確かめるためのスイッチ。
@@ -379,7 +392,7 @@ public partial class WidgetWindow : Window, IDisposable
         var reason = _updates.TryInstall(manual);
         if (reason is null)
         {
-            Application.Current.Shutdown();
+            ShutdownApp();
             return;
         }
 
@@ -439,7 +452,13 @@ public partial class WidgetWindow : Window, IDisposable
         _service.Updated += (_, snapshot) => OnForecastUpdated(snapshot);
 
         _service.Failed += (_, _) =>
+        {
+            _forecastFailed = true;
             _viewModel.ApplyFailure(_service.ConsecutiveFailures, DateTimeOffset.UtcNow);
+
+            // 掲示にも、取り直せていないことを出す
+            PushDisplay();
+        };
 
         _service.Start();
     }
@@ -455,7 +474,9 @@ public partial class WidgetWindow : Window, IDisposable
     private void OnForecastUpdated(ForecastSnapshot snapshot)
     {
         _snapshot = snapshot;
+        _forecastFailed = false;
         _viewModel.Apply(snapshot.Forecast, snapshot.Alert, _settings.PlaceName, snapshot.RetrievedAt);
+        PushDisplay();
 
         _dispatcher.Process(
             snapshot.Forecast,
@@ -511,11 +532,9 @@ public partial class WidgetWindow : Window, IDisposable
             // バルーンも出せなければ、小窓の表示だけが残る
         }
 
-        // 「トレイだけ」を選んでいても、届かなかった知らせは目に入る場所へ出す
-        if (_settings.Layer != WindowLayer.TrayOnly)
-        {
-            Show();
-        }
+        // 「トレイだけ」を選んでいても、届かなかった知らせは目に入る場所へ出す。
+        // 出すかどうかの判断は1か所（ApplyLayer）に任せる
+        ApplyLayer(ShowRequest.Notification);
 
         UpdateTrayState();
     }
@@ -567,6 +586,7 @@ public partial class WidgetWindow : Window, IDisposable
         {
             // 前の地点の判定を残さない。取得できるまで「取得中」を見せる
             _viewModel.ApplyLocationPending(_settings.PlaceName);
+            _snapshot = null;
             _service?.ChangeLocation(new Coordinate(_settings.Latitude, _settings.Longitude));
         }
         else
@@ -574,6 +594,9 @@ public partial class WidgetWindow : Window, IDisposable
             // 表示名だけ変わった場合に、次の取得を待たずに反映する
             _service?.RefreshNow();
         }
+
+        // 掲示にも、地点と注意の変化をその場で映す
+        PushDisplay();
     }
 
     /// <summary>設定に合わせて通知の登録を入れ直す。</summary>
@@ -671,6 +694,21 @@ public partial class WidgetWindow : Window, IDisposable
     {
         // Topmost は必ず設定から導く。分岐によって前の値が残らないようにする
         Topmost = _settings.Layer == WindowLayer.AlwaysOnTop;
+
+        // 終わりかけに小窓を出そうとしない。
+        // 閉じた窓に Show を呼ぶと例外になり、終了の経路で落ちる
+        if (_closed || _teardown)
+        {
+            return;
+        }
+
+        // 掲示のあいだは、どの経路から求められても小窓を出さない。
+        // 来場者の見る画面に小窓が重なるためである
+        if (_display is not null)
+        {
+            Hide();
+            return;
+        }
 
         if (_settings.Layer == WindowLayer.TrayOnly)
         {
@@ -929,12 +967,114 @@ public partial class WidgetWindow : Window, IDisposable
         if (IsVisible)
         {
             Hide();
+            return;
+        }
+
+        // 掲示のあいだは出さない。判断は ApplyLayer に任せる
+        ApplyLayer(ShowRequest.User);
+    }
+
+    private void OnToggleDisplay(object sender, RoutedEventArgs e)
+    {
+        if (_display is null)
+        {
+            StartDisplay();
         }
         else
         {
-            Show();
+            _display.Finish();
         }
     }
+
+    /// <summary>
+    /// 掲示を始める。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 全国の天気は掲示のあいだだけ取りに行く。
+    /// 1回の呼び出しが本体の側で都市の数だけ上流へ広がるためである。
+    /// </para>
+    /// <para>
+    /// 小窓は隠す。取得と通知と更新はこのまま小窓の側が持ち、掲示の窓へは描く材料だけを渡す。
+    /// </para>
+    /// </remarks>
+    private void StartDisplay()
+    {
+        if (_display is not null)
+        {
+            _display.Activate();
+            return;
+        }
+
+        if (_national is null)
+        {
+            _national = new NationalService();
+            _national.Updated += (_, _) => PushDisplay();
+        }
+
+        _national.Start();
+
+        var window = new DisplayWindow();
+        window.Finished += (_, _) => StopDisplay();
+        _display = window;
+
+        // 出す前に隠す。掲示の窓が前に出るまでのあいだ、小窓が映り込まないようにする
+        ApplyLayer();
+        UpdateDisplayMenu();
+
+        // 掲示先のモニターを選ぶのは設定画面の役で、いまはまだ無い。主モニターへ出す
+        _monitorMissing = window.ShowOn(null);
+        PushDisplay();
+    }
+
+    /// <summary>掲示を終えたあとの後始末。</summary>
+    private void StopDisplay()
+    {
+        _display = null;
+        _monitorMissing = false;
+        _national?.Stop();
+
+        UpdateDisplayMenu();
+
+        // 小窓を元の設定どおりに戻す
+        ApplyLayer();
+    }
+
+    /// <summary>掲示へ、いま手元にある材料を渡す。</summary>
+    /// <remarks>
+    /// 掲示を出していなければ何もしない。
+    /// 描く材料はここで組み、掲示の窓は受け取って描くだけにする。
+    /// </remarks>
+    private void PushDisplay()
+    {
+        if (_display is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        _display.Update(new DisplayInputs
+        {
+            Forecast = _snapshot?.Forecast,
+            Alert = _snapshot?.Alert,
+
+            // 対象日が今日でない応答は渡さない。昨日の天気を今日として掲げないためである
+            National = _national is { } national && national.IsUsable(now) ? national.Latest : null,
+            PlaceName = _settings.PlaceName,
+            Notices = new DisplayNoticeInputs
+            {
+                ForecastFailed = _forecastFailed,
+                MonitorMissing = _monitorMissing,
+                DefaultLocation = !_settings.HasChosenLocation,
+                DefaultPlaceName = _settings.PlaceName,
+            },
+        });
+    }
+
+    /// <summary>トレイの掲示の項目を、いまの状態に合わせる。</summary>
+    private void UpdateDisplayMenu() =>
+        DisplayItem.Header = _display is null ? "掲示を始める" : "掲示を終える";
 
     private void OnShowDiagnostics(object sender, RoutedEventArgs e)
     {
@@ -954,6 +1094,10 @@ public partial class WidgetWindow : Window, IDisposable
                 $"通知: 設定で{(_settings.NotificationsEnabled ? "入" : "切")} / 登録{(_toast.IsRegistered ? "済" : "なし")} / {_toast.DescribeSetting()}")
             .AppendLine(CultureInfo.InvariantCulture, $"自動起動: {StartupRegistration.GetState()}")
             .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"掲示: {(_display is null ? "出していない" : "出している")} / スリープの抑止: {(_display?.SleepSuppressed == true ? "要求できた" : "していない")}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"地点: {(_settings.HasChosenLocation ? "利用者が選んだ" : "既定のまま")}")
             .AppendLine()
             .AppendLine(_dispatcher.Describe(DateTimeOffset.UtcNow))
             .AppendLine(_updates?.Describe() ?? "更新: 未起動")
@@ -966,7 +1110,20 @@ public partial class WidgetWindow : Window, IDisposable
         ShowDialog(text, MessageBoxImage.Information);
     }
 
-    private void OnExit(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
+    private void OnExit(object sender, RoutedEventArgs e) => ShutdownApp();
+
+    /// <summary>
+    /// アプリを終える。
+    /// </summary>
+    /// <remarks>
+    /// 終えると決めた印を先に立てる。
+    /// 掲示の窓が閉じると小窓を出し直す作りのため、印が無いと終了の途中で出そうとする。
+    /// </remarks>
+    private void ShutdownApp()
+    {
+        _teardown = true;
+        Application.Current.Shutdown();
+    }
 
     /// <summary>
     /// 抱えている資源を放す。
@@ -977,7 +1134,12 @@ public partial class WidgetWindow : Window, IDisposable
     /// </remarks>
     public void Dispose()
     {
+        _teardown = true;
         _clickThrough?.Stop();
+
+        // 掲示の窓は小窓の持ち物である。閉じないと、小窓を閉じてもアプリが終われない
+        _display?.Finish();
+        _national?.Dispose();
         _service?.Dispose();
         _updates?.Dispose();
         _toast.Dispose();

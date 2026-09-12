@@ -135,7 +135,24 @@ public static class DisplayRotation
     public static RotationState Next(RotationState state, TimeSpan monotonic, bool emergency)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return MoveNext(state, monotonic, ActiveSlides(emergency));
+        return Move(state, monotonic, ActiveSlides(emergency), forward: true);
+    }
+
+    /// <summary>
+    /// 手で前へ戻す。
+    /// </summary>
+    /// <param name="state">いまの状態。</param>
+    /// <param name="monotonic">いまの単調時刻。</param>
+    /// <param name="emergency">もしものときを加えるか。</param>
+    /// <returns>次の状態。</returns>
+    /// <remarks>
+    /// 本体のWebの左矢印に当たる。
+    /// 送ったあとの扱いは <see cref="Next"/> と同じで、秒数が過ぎれば自動送りへ戻る。
+    /// </remarks>
+    public static RotationState Previous(RotationState state, TimeSpan monotonic, bool emergency)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return Move(state, monotonic, ActiveSlides(emergency), forward: false);
     }
 
     /// <summary>
@@ -153,12 +170,21 @@ public static class DisplayRotation
             : state with { PausedUntil = null, Deadline = monotonic + Duration(state.Current) };
     }
 
-    private static RotationState MoveNext(RotationState state, TimeSpan monotonic, IReadOnlyList<DisplaySlide> active)
+    private static RotationState MoveNext(RotationState state, TimeSpan monotonic, IReadOnlyList<DisplaySlide> active) =>
+        Move(state, monotonic, active, forward: true);
+
+    private static RotationState Move(
+        RotationState state,
+        TimeSpan monotonic,
+        IReadOnlyList<DisplaySlide> active,
+        bool forward)
     {
         var index = Array.IndexOf(Order, state.Current);
+        var direction = forward ? 1 : -1;
         for (var step = 1; step <= Order.Length; step++)
         {
-            var candidate = Order[(index + step) % Order.Length];
+            // 剰余は負になりうるため、長さを足してから取る
+            var candidate = Order[((index + (direction * step)) % Order.Length + Order.Length) % Order.Length];
             if (active.Contains(candidate))
             {
                 return state with { Current = candidate, Deadline = monotonic + Duration(candidate) };
