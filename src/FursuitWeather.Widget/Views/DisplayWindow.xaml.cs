@@ -101,12 +101,11 @@ internal sealed partial class DisplayWindow : Window
         // 出す前に置く。出してから動かすと、いちど別の場所へ描かれてから飛ぶ
         new WindowInteropHelper(this).EnsureHandle();
 
-        if (decision.Monitor is { } chosen &&
-            monitors.FirstOrDefault(m => string.Equals(m.Id, chosen.Id, StringComparison.OrdinalIgnoreCase)) is { } target)
-        {
-            MonitorLayout.Place(this, target);
-        }
-        else
+        var target = decision.Monitor is { } chosen
+            ? monitors.FirstOrDefault(m => string.Equals(m.Id, chosen.Id, StringComparison.OrdinalIgnoreCase))
+            : null;
+
+        if (target is null)
         {
             // モニターを1台も読めなかった。WPFの知る主モニターいっぱいに広げる。
             // 大きさを決めずに出すと、既定の小さな窓のまま掲示することになる
@@ -115,8 +114,20 @@ internal sealed partial class DisplayWindow : Window
             Width = SystemParameters.PrimaryScreenWidth;
             Height = SystemParameters.PrimaryScreenHeight;
         }
+        else
+        {
+            MonitorLayout.Place(this, target);
+        }
 
         Show();
+
+        // 出したあとにもう一度当てる。
+        // WPFが出すときに大きさを当て直す場合があり、当て直されるとモニターいっぱいにならない
+        if (target is not null)
+        {
+            MonitorLayout.Place(this, target);
+        }
+
         Activate();
         _tick.Start();
         return decision.FellBack;
