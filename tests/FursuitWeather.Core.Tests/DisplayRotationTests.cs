@@ -118,6 +118,45 @@ public sealed class DisplayRotationTests
     }
 
     [Fact]
+    public void 手で前へ戻すと並びの1つ前を出す()
+    {
+        // 本体のWebの左矢印に当たる
+        var state = DisplayRotation.Start(S(0));
+
+        state = DisplayRotation.Previous(state, S(3), emergency: false);
+
+        Assert.Equal(DisplaySlide.National, state.Current);
+        Assert.Equal(S(23), state.Deadline);
+    }
+
+    [Fact]
+    public void 前へ戻すときも出さないスライドは飛ばす()
+    {
+        // もしものときを出していないあいだは、いまの判定の1つ前は全国の天気になる
+        var state = new RotationState { Current = DisplaySlide.Hours, Deadline = S(100) };
+
+        var back = DisplayRotation.Previous(state, S(5), emergency: false);
+        Assert.Equal(DisplaySlide.Now, back.Current);
+
+        var wrapped = DisplayRotation.Previous(back, S(6), emergency: false);
+        Assert.Equal(DisplaySlide.National, wrapped.Current);
+
+        var withEmergency = DisplayRotation.Previous(back, S(6), emergency: true);
+        Assert.Equal(DisplaySlide.Emergency, withEmergency.Current);
+    }
+
+    [Fact]
+    public void 止めているあいだに前へ戻しても止めたまま()
+    {
+        var paused = DisplayRotation.TogglePause(DisplayRotation.Start(S(0)), S(1));
+
+        var back = DisplayRotation.Previous(paused, S(2), emergency: false);
+
+        Assert.Equal(DisplaySlide.National, back.Current);
+        Assert.True(back.IsPaused);
+    }
+
+    [Fact]
     public void 止めると期限を過ぎても進まない()
     {
         var state = DisplayRotation.TogglePause(DisplayRotation.Start(S(0)), S(1));

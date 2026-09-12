@@ -195,6 +195,9 @@ public partial class SettingsWindow : Window
             Latitude = coordinate.Latitude,
             Longitude = coordinate.Longitude,
             PlaceName = place,
+
+            // 手で入れて保存したので、地点は利用者が選んだものになる
+            LocationChosen = true,
             Layer = ReadLayer(),
             NotificationsEnabled = NotificationsCheck.IsChecked == true,
             StartWithWindows = startup,
