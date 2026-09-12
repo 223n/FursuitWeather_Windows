@@ -313,9 +313,12 @@ public partial class SettingsWindow : Window
             SearchResults.Visibility = Visibility.Visible;
             ShowSearchState("選ぶと、緯度と経度と表示名が入ります。");
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        catch (Exception exception) when (
+            exception is HttpRequestException or TaskCanceledException or ObjectDisposedException or System.Text.Json.JsonException)
         {
-            // 探せなくても設定は閉じない。手で座標を入れる道が残っている
+            // 探せなくても設定は閉じない。手で座標を入れる道が残っている。
+            // 探している最中に画面を閉じると、通信の手段が捨てられて ObjectDisposedException になる。
+            // async void の経路のため、ここで受けないとアプリごと落ちる
             ShowSearchState("探せませんでした。回線を確かめてから、もう一度試してください。");
         }
         finally
