@@ -178,4 +178,4 @@ gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.base
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
 - コード署名をしていません。SmartScreenの警告が出ます
 - トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります
-- 掲示モード（`docs/display.md`）は、通知の抑制と更新の保留、設定画面がまだです
+- 掲示モード（`docs/display.md`）は、地点の検索と掲示先のモニターの設定がまだです

@@ -42,8 +42,17 @@ public partial class WidgetWindow : Window, IDisposable
     private NationalService? _national;
     private DisplayWindow? _display;
     private bool _forecastFailed;
-    private bool _monitorMissing;
     private bool _teardown;
+
+    /// <summary>掲示中に届いた更新の知らせ。終えたあとに出す。</summary>
+    private string? _heldUpdateNotice;
+
+    /// <summary>起動したときの更新の成否。掲示で始めるなら運営者向けの注意へ回す。</summary>
+    private (string Title, string[] Lines)? _startupUpdateToast;
+    private string? _startupUpdateNotice;
+
+    /// <summary>起動したらそのまま掲示へ入るか。</summary>
+    private readonly bool _startInDisplay;
     private SettingsWindow? _settingsWindow;
     private readonly ToastNotifier _toast = new();
     private readonly NotificationDispatcher _dispatcher;
@@ -65,7 +74,12 @@ public partial class WidgetWindow : Window, IDisposable
         // 通知だけが静かに壊れる状態を作らないための受け皿である
         _dispatcher.FellBack += (_, message) => Dispatcher.Invoke(() => ShowFallback(message));
 
-        if (_settings.Layer == WindowLayer.TrayOnly)
+        // 掲示で始めるかは、窓を出す前に決める。
+        // 更新のあとの起動し直しでは、設定ではなくインストールを始めたときに掲示していたかで決める。
+        // 起動の引数には頼らない。自動起動も更新のあとの起動し直しも、引数を渡さないためである
+        _startInDisplay = _settings.StartInDisplay || UpdateStateStore.Load().ResumeDisplayAfterInstall;
+
+        if (_settings.Layer == WindowLayer.TrayOnly || _startInDisplay)
         {
             StartHidden();
         }
@@ -158,6 +172,22 @@ public partial class WidgetWindow : Window, IDisposable
         // 変化の検知から文面までの配線を、実データで確かめるためのスイッチ。
         // 予報を取れてからでないと判定できないため、最初の取得を待つ
         _selfTestDetector = args.Contains("--self-test-detector", StringComparer.Ordinal);
+
+        // 掲示は、起動の処理を抜けてから始める。
+        // ここで始めると、掲示のあいだ小窓を隠す処理が効かない。
+        // SourceInitialized は Show の途中で起き、そこでの Hide は何もせずに戻る
+        if (_startInDisplay)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                StartDisplay();
+                DeliverStartupUpdateToast();
+            });
+        }
+        else
+        {
+            DeliverStartupUpdateToast();
+        }
 
         Closed += (_, _) =>
         {
@@ -287,14 +317,17 @@ public partial class WidgetWindow : Window, IDisposable
 
         _updates = new UpdateService(url);
 
+        // 出すのはここではない。掲示で始めるなら、トーストではなく運営者向けの注意へ回す
         var outcome = _updates.ReconcileAtStartup();
         if (outcome == Core.Update.InstallOutcome.Succeeded)
         {
-            _toast.Show("FursuitWeather を更新しました", [_updates.LastMessage]);
+            _startupUpdateToast = ("FursuitWeather を更新しました", [_updates.LastMessage]);
+            _startupUpdateNotice = _updates.LastMessage;
         }
         else if (outcome == Core.Update.InstallOutcome.Failed)
         {
-            _toast.Show("更新が途中で終わりました", [_updates.LastMessage, "トレイの「更新を確認」から入れ直せます"]);
+            _startupUpdateToast = ("更新が途中で終わりました", [_updates.LastMessage, "トレイの「更新を確認」から入れ直せます"]);
+            _startupUpdateNotice = _updates.LastMessage;
         }
 
         _updates.Changed += (_, _) => UpdateUpdateMenu();
@@ -311,10 +344,22 @@ public partial class WidgetWindow : Window, IDisposable
     }
 
     /// <summary>更新の知らせを、割り込むかどうか決めて出す。</summary>
+    /// <param name="message">知らせの本文。</param>
+    /// <remarks>
+    /// 掲示のあいだは捨てずに持ち越し、終えたあとに出し直す。
+    /// 来場者の見る画面にトーストを重ねないためである。
+    /// </remarks>
     private void OnUpdateNotice(string message)
     {
         if (_updates is null)
         {
+            return;
+        }
+
+        if (_display is not null)
+        {
+            _heldUpdateNotice = message;
+            UpdateUpdateMenu();
             return;
         }
 
@@ -1016,28 +1061,84 @@ public partial class WidgetWindow : Window, IDisposable
 
         var window = new DisplayWindow();
         window.Finished += (_, _) => StopDisplay();
+
+        // モニターが外れて移したときは、上の帯の注意を出し直す
+        window.MonitorChanged += (_, _) => PushDisplay();
         _display = window;
+
+        // トーストは1件も出さない。判定と保存は掲示の外と同じように回す
+        _dispatcher.Suppressed = true;
+
+        // 自動のインストールは保留する。取得は止めない
+        if (_updates is not null)
+        {
+            _updates.DisplayActive = true;
+        }
 
         // 出す前に隠す。掲示の窓が前に出るまでのあいだ、小窓が映り込まないようにする
         ApplyLayer();
         UpdateDisplayMenu();
 
         // 掲示先のモニターを選ぶのは設定画面の役で、いまはまだ無い。主モニターへ出す
-        _monitorMissing = window.ShowOn(null);
+        window.ShowOn(null);
         PushDisplay();
     }
 
     /// <summary>掲示を終えたあとの後始末。</summary>
+    /// <remarks>
+    /// 保留していた更新は、1分ごとの見直しが拾う。ここでは何も急がせない。
+    /// 持ち越した更新の知らせだけは、出せる時間帯なら出し直す。
+    /// </remarks>
     private void StopDisplay()
     {
         _display = null;
-        _monitorMissing = false;
         _national?.Stop();
+        _dispatcher.Suppressed = false;
+
+        // 起動したときの更新の成否は、1回の掲示で出し終える。
+        // 残すと、次に掲示を始めたときにまた運営者向けの注意へ出る
+        _startupUpdateNotice = null;
+
+        if (_updates is not null)
+        {
+            _updates.DisplayActive = false;
+        }
 
         UpdateDisplayMenu();
 
         // 小窓を元の設定どおりに戻す
         ApplyLayer();
+
+        if (_heldUpdateNotice is { } held)
+        {
+            _heldUpdateNotice = null;
+            OnUpdateNotice(held);
+        }
+    }
+
+    /// <summary>
+    /// 起動したときの更新の成否を知らせる。
+    /// </summary>
+    /// <remarks>
+    /// 掲示で始めたときはトーストを出さず、運営者向けの注意へ回す。
+    /// 来場者の見る画面に、起動直後のトーストを重ねないためである。
+    /// </remarks>
+    private void DeliverStartupUpdateToast()
+    {
+        if (_startupUpdateToast is not { } toast)
+        {
+            return;
+        }
+
+        _startupUpdateToast = null;
+
+        if (_display is not null)
+        {
+            return;
+        }
+
+        _startupUpdateNotice = null;
+        _toast.Show(toast.Title, toast.Lines);
     }
 
     /// <summary>掲示へ、いま手元にある材料を渡す。</summary>
@@ -1065,7 +1166,10 @@ public partial class WidgetWindow : Window, IDisposable
             Notices = new DisplayNoticeInputs
             {
                 ForecastFailed = _forecastFailed,
-                MonitorMissing = _monitorMissing,
+                MonitorMissing = _display.MonitorMissing,
+                MonitorMoved = _display.MonitorMoved,
+                HotkeyFailed = _display.HotkeyFailed,
+                UpdateResult = _startupUpdateNotice,
                 DefaultLocation = !_settings.HasChosenLocation,
                 DefaultPlaceName = _settings.PlaceName,
             },
@@ -1096,6 +1200,10 @@ public partial class WidgetWindow : Window, IDisposable
             .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
             .AppendLine(CultureInfo.InvariantCulture,
                 $"掲示: {(_display is null ? "出していない" : "出している")} / スリープの抑止: {(_display?.SleepSuppressed == true ? "要求できた" : "していない")}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"掲示のホットキー(Ctrl+Alt+D): {(_display is null ? "掲示していない" : _display.HotkeyFailed ? "登録できていない" : "登録できている")}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"起動したら掲示で始める: {(_settings.StartInDisplay ? "入" : "切")}")
             .AppendLine(CultureInfo.InvariantCulture,
                 $"地点: {(_settings.HasChosenLocation ? "利用者が選んだ" : "既定のまま")}")
             .AppendLine()

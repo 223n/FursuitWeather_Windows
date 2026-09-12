@@ -143,6 +143,13 @@
                            Foreground="#4A4A4A"
                            Text="「設定」の「アプリ」の「スタートアップ」やタスクマネージャーからも切り替えられます。" />
 
+                <CheckBox x:Name="StartInDisplayCheck" Margin="0,10,0,0" Content="起動したら掲示で始める" />
+                <TextBlock Margin="24,2,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="#4A4A4A"
+                           Text="会場の専用端末向けです。停電や再起動のあとも、人の手を借りずに掲示へ戻ります。掲示はEscキーか Ctrl+Alt+D、トレイのメニューで終えられます。" />
+
                 <!--
                     更新の扱い。文言は docs/update.md の「設定画面の文言」に合わせる。
                     モードA、B、Cという記号は見せず、何が起きるかで書く

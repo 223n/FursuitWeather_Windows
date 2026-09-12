@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -26,6 +27,18 @@ namespace FursuitWeather.Widget.Views;
 /// </remarks>
 internal sealed partial class DisplayWindow : Window
 {
+    /// <summary>掲示を終えるホットキーの識別の値。小窓のクリックスルーとは別にする。</summary>
+    private const int ExitHotKeyId = 0xF002;
+
+    private const uint ModAlt = 0x0001;
+    private const uint ModControl = 0x0002;
+    private const uint ModNoRepeat = 0x4000;
+    private const uint VkD = 0x44;
+    private const int WmHotKey = 0x0312;
+
+    /// <summary>モニターの構成が変わったことの知らせ。</summary>
+    private const int WmDisplayChange = 0x007E;
+
     /// <summary>操作の帯とカーソルを隠すまでの時間。</summary>
     private static readonly TimeSpan IdleBeforeHiding = TimeSpan.FromSeconds(3);
 
@@ -41,6 +54,11 @@ internal sealed partial class DisplayWindow : Window
 
     private readonly DisplayViewModel _viewModel = new();
     private readonly DispatcherTimer _tick;
+
+    private string? _preferredId;
+    private string? _originalId;
+    private string? _currentId;
+    private bool _hotKeyRegistered;
 
     private RotationState _rotation;
     private DisplayInputs _inputs = new();
@@ -58,8 +76,21 @@ internal sealed partial class DisplayWindow : Window
     /// <remarks>利用者が終えたときも、ほかの経路で閉じたときも1回だけ起きる。</remarks>
     public event EventHandler? Finished;
 
+    /// <summary>モニターの置き方が変わったときに起きる。</summary>
+    /// <remarks>上の帯の注意を出し直すために、外へ知らせる。</remarks>
+    public event EventHandler? MonitorChanged;
+
     /// <summary>スリープの抑止を要求できたか。検証の画面に出す。</summary>
     public bool SleepSuppressed { get; private set; }
+
+    /// <summary>掲示を終えるホットキーを登録できなかったか。</summary>
+    public bool HotkeyFailed => !_hotKeyRegistered;
+
+    /// <summary>選んだモニターが見つからず、主モニターへ出しているか。</summary>
+    public bool MonitorMissing { get; private set; }
+
+    /// <summary>掲示先のモニターが外れ、ほかのモニターへ移したか。</summary>
+    public bool MonitorMoved { get; private set; }
 
     /// <summary>掲示の窓を作る。</summary>
     public DisplayWindow()
@@ -95,42 +126,80 @@ internal sealed partial class DisplayWindow : Window
     /// </remarks>
     public bool ShowOn(string? preferredId)
     {
-        var monitors = MonitorLayout.Enumerate();
-        var decision = MonitorChoice.Resolve(preferredId, [.. monitors.Select(m => m.ToCore())]);
+        _preferredId = preferredId;
 
         // 出す前に置く。出してから動かすと、いちど別の場所へ描かれてから飛ぶ
         new WindowInteropHelper(this).EnsureHandle();
+        ApplyMonitor(initial: true);
+
+        Show();
+
+        // 出したあとにもう一度当てる。
+        // WPFが出すときに大きさを当て直す場合があり、当て直されるとモニターいっぱいにならない
+        ApplyMonitor(initial: true);
+
+        _originalId = _currentId;
+
+        Activate();
+        _tick.Start();
+        return MonitorMissing;
+    }
+
+    /// <summary>
+    /// いまつながっているモニターを読み直し、窓を置き直す。
+    /// </summary>
+    /// <param name="initial">掲示を始めるときの呼び出しなら true。</param>
+    /// <remarks>
+    /// <para>
+    /// 開いているあいだに掲示先が外れたら、残ったモニターへ移して続ける。
+    /// 無人の端末で、一瞬抜けただけで止まったままにしないためである。
+    /// </para>
+    /// <para>
+    /// 戻ってきたら元のモニターへ戻し、移したことの注意も消す。
+    /// </para>
+    /// </remarks>
+    private void ApplyMonitor(bool initial)
+    {
+        var monitors = MonitorLayout.Enumerate();
+        var decision = MonitorChoice.Resolve(_preferredId, [.. monitors.Select(m => m.ToCore())]);
 
         var target = decision.Monitor is { } chosen
             ? monitors.FirstOrDefault(m => string.Equals(m.Id, chosen.Id, StringComparison.OrdinalIgnoreCase))
             : null;
 
+        MonitorMissing = decision.FellBack;
+
         if (target is null)
         {
+            if (!initial)
+            {
+                return;
+            }
+
             // モニターを1台も読めなかった。WPFの知る主モニターいっぱいに広げる。
             // 大きさを決めずに出すと、既定の小さな窓のまま掲示することになる
             Left = 0;
             Top = 0;
             Width = SystemParameters.PrimaryScreenWidth;
             Height = SystemParameters.PrimaryScreenHeight;
+            return;
         }
-        else
+
+        if (!initial && _currentId is { } previous &&
+            !monitors.Any(m => string.Equals(m.Id, previous, StringComparison.OrdinalIgnoreCase)))
         {
-            MonitorLayout.Place(this, target);
+            // 出していたモニターが外れた
+            MonitorMoved = true;
         }
 
-        Show();
+        MonitorLayout.Place(this, target);
+        _currentId = target.Id;
 
-        // 出したあとにもう一度当てる。
-        // WPFが出すときに大きさを当て直す場合があり、当て直されるとモニターいっぱいにならない
-        if (target is not null)
+        if (_originalId is { } original && string.Equals(target.Id, original, StringComparison.OrdinalIgnoreCase))
         {
-            MonitorLayout.Place(this, target);
+            // 元のモニターへ戻れた
+            MonitorMoved = false;
         }
-
-        Activate();
-        _tick.Start();
-        return decision.FellBack;
     }
 
     /// <summary>
@@ -157,6 +226,12 @@ internal sealed partial class DisplayWindow : Window
         // 掲示のあいだ、画面と端末を眠らせない
         SleepSuppressed = DisplaySleep.Keep();
 
+        var handle = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(handle)?.AddHook(OnWindowMessage);
+
+        // 抜ける経路その3。全画面の窓がタスクバーを覆うと、トレイに手が届かなくなる
+        _hotKeyRegistered = RegisterHotKey(handle, ExitHotKeyId, ModControl | ModAlt | ModNoRepeat, VkD);
+
         Closed += (_, _) =>
         {
             if (_closing)
@@ -166,9 +241,41 @@ internal sealed partial class DisplayWindow : Window
 
             _closing = true;
             _tick.Stop();
+
+            if (_hotKeyRegistered)
+            {
+                UnregisterHotKey(handle, ExitHotKeyId);
+            }
+
             DisplaySleep.Release();
             Finished?.Invoke(this, EventArgs.Empty);
         };
+    }
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WmHotKey && wParam.ToInt32() == ExitHotKeyId)
+        {
+            Finish();
+            handled = true;
+            return IntPtr.Zero;
+        }
+
+        if (msg == WmDisplayChange)
+        {
+            ApplyMonitor(initial: false);
+            MonitorChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return IntPtr.Zero;
     }
 
     private void OnTick(object? sender, EventArgs e)
