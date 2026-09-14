@@ -146,7 +146,7 @@ public static class NotificationText
     /// </remarks>
     private static NotificationMessage Official(PendingNotification n, HeatAlert? alert)
     {
-        var special = alert?.Special == true;
+        var kind = (alert ?? new HeatAlert()).KindName;
         var name = string.IsNullOrEmpty(alert?.PrefectureName) ? "発表地域" : alert.PrefectureName;
 
         var second = string.IsNullOrEmpty(n.CurrentLabel)
@@ -157,7 +157,7 @@ public static class NotificationText
         {
             Source = NotificationSource.Change,
             Kind = n.Kind,
-            Title = special ? $"熱中症特別警戒アラート（{name}）" : $"熱中症警戒アラート（{name}）",
+            Title = $"{kind}（{name}）",
             Lines = ["環境省・気象庁が発表しました", second],
             IsUrgent = true,
         };

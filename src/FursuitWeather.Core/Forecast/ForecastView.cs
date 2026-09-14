@@ -33,33 +33,47 @@ public static class ForecastView
     /// 添字を時刻とみなしてはならない。かならず時刻の値で突き合わせる。
     /// </para>
     /// <para>
-    /// いまの時刻を含む時間が無い場合は、直前の時間へ落とす。
-    /// 欠測の時間があっても画面が空にならないようにするためである。
+    /// <b>本体と同じ規則で選ぶ。</b>
+    /// 日本時間の当日の行から、いまの時間の行を選ぶ。
+    /// 無ければ当日の直近の未来の行を選び、それも無ければ選ばない。
+    /// 本体の <c>pickCurrentHour</c>（<c>public/app.js</c> と <c>public/display.js</c>）と同じである。
+    /// </para>
+    /// <para>
+    /// 小窓と掲示の両方がこの関数を使う。
+    /// 同じ端末で、小窓と掲示が別の時間を「いま」と出さないようにするためである。
+    /// 過去へは落とさない。すでに過ぎた時間を「いま」として掲げないためである。
     /// </para>
     /// </remarks>
     public static HourForecast? SelectCurrentHour(ForecastResponse forecast, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(forecast);
 
-        HourForecast? best = null;
-        var bestInstant = DateTimeOffset.MinValue;
+        var local = JstTime.ToLocal(now);
+        var today = DateOnly.FromDateTime(local);
+
+        HourForecast? exact = null;
+        HourForecast? nextFuture = null;
+        var nextFutureHour = int.MaxValue;
 
         foreach (var hour in forecast.Hours)
         {
-            var instant = JstTime.ToInstant(hour.Time);
-            if (instant is null || instant.Value > now)
+            if (JstTime.ParseLocal(hour.Time) is not { } time || DateOnly.FromDateTime(time) != today)
             {
                 continue;
             }
 
-            if (best is null || instant.Value > bestInstant)
+            if (time.Hour == local.Hour)
             {
-                best = hour;
-                bestInstant = instant.Value;
+                exact ??= hour;
+            }
+            else if (time.Hour > local.Hour && time.Hour < nextFutureHour)
+            {
+                nextFuture = hour;
+                nextFutureHour = time.Hour;
             }
         }
 
-        return best;
+        return exact ?? nextFuture;
     }
 
     /// <summary>

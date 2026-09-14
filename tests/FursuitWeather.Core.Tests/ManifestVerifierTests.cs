@@ -169,11 +169,42 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Fact]
-    public void 前回と同じ時刻のマニフェストも無視する()
+    public void 前回と同じ時刻のマニフェストは受け入れる()
     {
+        // 新しい版が出るまで、確認のたびに同じマニフェストが返る。
+        // これを弾くと、取得に1度失敗しただけで二度と取り直さなくなる
         var same = DateTimeOffset.Parse("2026-09-10T04:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
 
         var result = Run(Manifest(generatedAt: "2026-09-10T04:00:00Z"), lastGeneratedAt: same);
+
+        Assert.Equal(UpdateVerdict.Available, result.Verdict);
+    }
+
+    [Fact]
+    public void 取得に失敗したあとの確認でも同じ版を取り直せる()
+    {
+        // 検証器と記録の組み合わせで起きる筋書きをそのまま通す。
+        // 1回目で受け入れた時刻を覚え、取得が失敗し、2回目で同じマニフェストが返る
+        var (bytes, signature) = Sign(Manifest());
+        var first = ManifestVerifier.Verify(bytes, signature, _publicKeyPem, Current, null, OsBuild, Arch);
+        Assert.Equal(UpdateVerdict.Available, first.Verdict);
+
+        var state = UpdateLedger.RecordCheck(
+            new UpdateState(), DateTimeOffset.UtcNow, TimeSpan.Zero, first.Manifest!.GeneratedAt);
+
+        var second = ManifestVerifier.Verify(
+            bytes, signature, _publicKeyPem, Current, state.LastManifestGeneratedAt, OsBuild, Arch);
+
+        Assert.Equal(UpdateVerdict.Available, second.Verdict);
+    }
+
+    [Fact]
+    public void 前回より1秒でも古いマニフェストは弾く()
+    {
+        // 巻き戻しとは、署名済みの古いマニフェストを出し直されること
+        var last = DateTimeOffset.Parse("2026-09-10T04:00:01Z", System.Globalization.CultureInfo.InvariantCulture);
+
+        var result = Run(Manifest(generatedAt: "2026-09-10T04:00:00Z"), lastGeneratedAt: last);
 
         Assert.Equal(UpdateVerdict.Stale, result.Verdict);
     }
@@ -232,6 +263,29 @@ public sealed class ManifestVerifierTests : IDisposable
         var result = Run(Manifest(url: url));
 
         Assert.Equal(UpdateVerdict.PackageInvalid, result.Verdict);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/223n/x/releases/download/v0.4.0/")]
+    [InlineData("https://github.com/")]
+    [InlineData("https://github.com/223n/x/releases/download/v0.4.0/..")]
+    public void 置くときの名前を取り出せなければ配らない(string url)
+    {
+        // 通すと取得の段で例外になり、確認のたびにアプリが落ちる
+        var result = Run(Manifest(url: url));
+
+        Assert.Equal(UpdateVerdict.PackageInvalid, result.Verdict);
+    }
+
+    [Fact]
+    public void 置くときの名前はURLの最後の区切りから取る()
+    {
+        var package = new UpdatePackage
+        {
+            Url = "https://github.com/223n/FursuitWeather_Windows/releases/download/v0.4.0/FursuitWeather-0.4.0-x64-setup.exe",
+        };
+
+        Assert.Equal("FursuitWeather-0.4.0-x64-setup.exe", ManifestVerifier.PackageFileName(package));
     }
 
     [Theory]

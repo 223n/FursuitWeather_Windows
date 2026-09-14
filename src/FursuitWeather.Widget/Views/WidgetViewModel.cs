@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 using FursuitWeather.Core.Changes;
+using FursuitWeather.Core.Display;
 using FursuitWeather.Core.Forecast;
 using FursuitWeather.Core.Models;
 using FursuitWeather.Core.Time;
@@ -13,8 +14,6 @@ namespace FursuitWeather.Widget.Views;
 /// <summary>小窓へ出す値。</summary>
 internal sealed class WidgetViewModel : INotifyPropertyChanged
 {
-    /// <summary>gradeごとの記号。本体の <c>GRADE_SYMBOLS</c> と同じ。</summary>
-    private static readonly string[] GradeSymbols = ["◎", "○", "△", "✕", "✕"];
 
     /// <summary>
     /// トーストの代わりにここへ出した知らせを、いつまで残すか。
@@ -134,7 +133,8 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
         var grade = Math.Clamp(outdoor.Grade, 0, 4);
 
         HeaderText = string.Create(CultureInfo.InvariantCulture, $"{placeName}　{FormatHour(hour.Time)}");
-        Symbol = cold ? "❄" : GradeSymbols[grade];
+        // 記号の表は掲示と共有する。低温の見分け方は小窓のまま IsCold() を使う
+        Symbol = cold ? DisplayTone.ColdSymbol : DisplayTone.GradeSymbol(grade);
         LevelLabel = outdoor.Label;
 
         ActivityText = outdoor.ActivityMinutes <= 0

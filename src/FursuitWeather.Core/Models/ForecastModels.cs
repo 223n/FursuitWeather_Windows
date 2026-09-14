@@ -192,6 +192,20 @@ public sealed record LevelSummary
     public int Grade { get; init; }
 }
 
+/// <summary>洗濯の判定。</summary>
+/// <remarks>
+/// 掲示では文字だけを出す。
+/// レベルから配色を引く表は、判定の <c>grade</c> 以外から配色を引くことになるため持たない。
+/// </remarks>
+public sealed record LaundryAssessment
+{
+    /// <summary>レベルID。</summary>
+    public string Level { get; init; } = string.Empty;
+
+    /// <summary>日本語のラベル。</summary>
+    public string Label { get; init; } = string.Empty;
+}
+
 /// <summary>1日分の予報のまとめ。</summary>
 public sealed record DayForecast
 {
@@ -233,6 +247,9 @@ public sealed record DayForecast
 
     /// <summary>その日の最大風速（m/s）。</summary>
     public double MaxWindSpeed { get; init; }
+
+    /// <summary>洗濯の判定。古いAPIや欠測では null。</summary>
+    public LaundryAssessment? Laundry { get; init; }
 }
 
 /// <summary>急な暑さの注意。</summary>

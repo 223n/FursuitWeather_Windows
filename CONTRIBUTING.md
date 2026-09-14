@@ -24,6 +24,22 @@ GitFlowに沿って運用します。
 リリースと緊急の修正の手順は[README](README.md)の「ブランチとリリース」にあります。
 Pull Requestはマージコミット（Create a merge commit）でマージします。
 
+### `develop`や`main`をheadにしたPRを作らない
+
+**headが`develop`か`main`のPRをマージすると、そのブランチ自体が消えます。**
+このリポジトリは「マージ後にheadを自動で消す」が有効なためです。
+
+- develop→mainのPRを手で作らないでください。リリースは「リリース」ワークフローが`release/*`を切って行います
+- main→developのPRも手で作らないでください。戻しは公開のワークフローが`merge/*`を切って行います
+- マージの画面で「Delete branch」を押す前に、headのブランチ名を確かめてください
+
+ルールセットの`deletion`はこれを止めません。
+管理者はルールセットを迂回できる設定になっており、管理者の操作では素通りします。
+
+**特に`main`が危険です。**
+`develop`は既定のブランチのため、GitHubが削除を拒みます。
+`main`は既定ではないため、そのまま消えます。
+
 ## 文書の書き方
 
 日本語の文書は`textlint`と`markdownlint`で検査します。

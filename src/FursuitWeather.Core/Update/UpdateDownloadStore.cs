@@ -167,6 +167,76 @@ public sealed class UpdateDownloadStore
     }
 
     /// <summary>
+    /// 前に取得して置いてあるものから、指定の配布物と一致するものを探す。
+    /// </summary>
+    /// <param name="fileName">ファイルの名前。</param>
+    /// <param name="size">期待する大きさ。</param>
+    /// <param name="sha256">期待するSHA-256。小文字の16進。</param>
+    /// <returns>見つかれば、掴んだ状態の置き場所。無ければ null。</returns>
+    /// <remarks>
+    /// <para>
+    /// 取り直すと、200MB近くを確認や再起動のたびに落とすことになる。
+    /// </para>
+    /// <para>
+    /// <b>照合の相手は、署名を通したばかりのマニフェストの値である。</b>
+    /// ディスクに置いてあったこと自体は信用しない。
+    /// 掴んでからハッシュを取り、一致したものだけを掴んだまま返す。
+    /// </para>
+    /// </remarks>
+    public UpdateDownload? FindVerified(string fileName, long size, string sha256)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha256);
+
+        if (!IsSafeFileName(fileName) || !System.IO.Directory.Exists(_root))
+        {
+            return null;
+        }
+
+        string[] directories;
+        try
+        {
+            directories = System.IO.Directory.GetDirectories(_root);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        foreach (var directory in directories)
+        {
+            var path = System.IO.Path.Combine(directory, fileName);
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            var candidate = new UpdateDownload(System.IO.Path.GetFileName(directory), directory, path);
+            var matched = false;
+            try
+            {
+                candidate.Hold();
+
+                // 大きさが違えば、ハッシュを取るまでもない。途中で終わった取得がこれに当たる
+                matched = candidate.Length == size &&
+                    string.Equals(candidate.ComputeSha256(), sha256, StringComparison.Ordinal);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // 掴まれている最中か、消されたところ。使わない
+            }
+
+            if (matched)
+            {
+                return candidate;
+            }
+
+            candidate.Dispose();
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// ディレクトリを含まない名前かを見る。
     /// </summary>
     /// <param name="name">確かめる名前。</param>
@@ -183,7 +253,7 @@ public sealed class UpdateDownloadStore
     /// 狙った場所へ書かせないための判定なので、自前で持つ。
     /// </para>
     /// </remarks>
-    private static bool IsSafeFileName(string name)
+    public static bool IsSafeFileName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name == "." || name == "..")
         {

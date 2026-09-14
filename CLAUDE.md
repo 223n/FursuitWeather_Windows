@@ -19,6 +19,7 @@ FursuitWeather_Windowsは、Webサービス[FursuitWeather](https://fursuit-weat
 | `docs/development.md` | 既存のCIとリリース運用にC#を載せるための変更点 |
 | `docs/notifications.md` | いつ通知を出すか。抑制の規則と文面。実測の根拠 |
 | `docs/update.md` | 更新の3つのモードと、その選び方 |
+| `docs/display.md` | 会場の専用の端末で使う掲示モード。Mac版とWebとの関係、写さないもの |
 | `docs/open-questions.md` | 未決の仕様と、確かめていない前提 |
 
 判定そのもの（暑さ指数の計算、レベルの判定、連続活動時間の算出）は本体のAPIが行います。
@@ -123,6 +124,32 @@ git flow feature start 変更の名前
 - マージはマージコミット（Create a merge commit）です。squashとrebaseは、リリースノートが壊れるため使いません
 - コミットメッセージは`[Add/Mod/Fix/Del/Doc]`の接頭辞と日本語で書きます。1行目は50文字程度に収め、理由は空行を挟んだ本文に書きます
 
+### PRのマージで`develop`や`main`を消さない
+
+**headが`develop`か`main`のPRをマージすると、そのブランチ自体が消えます。**
+develop→mainや、main→developのPRが該当します。
+
+消える経路が2つあります。
+
+- `gh pr merge --delete-branch`はheadのブランチを消します
+- リポジトリの「マージ後にheadを自動で消す」（`delete_branch_on_merge`）が有効です。付けなくても消えます
+
+**ルールセットの`deletion`は止めてくれません。**
+`main`のルールセットは`develop`と`main`の両方に`deletion`を掛けていますが、bypassが`RepositoryRole:always`です。
+管理者の資格情報では素通りします。
+実際に`main`へのforce-pushが`Bypassed rule violations`と出て通った記録があります。
+
+マージする前にheadを確かめます。
+
+```bash
+gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.baseRefName)"'
+```
+
+- **headが`develop`か`main`なら、マージしません。** そういうPRはそもそも作りません
+- `develop`と`main`を行き来させるのはリリースのワークフローだけです。headは`release/*`（→`main`）と`merge/*`（→`develop`）になり、消えてよいブランチです
+- **`main`は既定のブランチではないため、どちらの経路でも消えます。** いちばん危ないのはmain→developのPRです
+- `develop`は既定のブランチであるあいだ、GitHubが削除を拒みます。ただし既定を変えた瞬間に同じ危険にさらされます。これに頼らないでください
+
 ## 文書の書き方
 
 `**/*.md`のすべてがCIで検査されます。
@@ -149,6 +176,6 @@ git flow feature start 変更の名前
 ## まだ手を付けていないもの
 
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
-- 更新の仕組み（3つのモード）は、文書だけで実装がありません
 - コード署名をしていません。SmartScreenの警告が出ます
 - トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります
+- 掲示モード（`docs/display.md`）は、実機での確認が残っています

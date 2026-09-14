@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FursuitWeather.Core.Models;
 
 /// <summary>環境省の熱中症警戒アラートの発表。</summary>
@@ -18,6 +20,14 @@ public sealed record HeatAlert
 
     /// <summary>対象の日付。</summary>
     public string TargetDate { get; init; } = string.Empty;
+
+    /// <summary>種別の名前。</summary>
+    /// <remarks>
+    /// APIは真偽しか返さないため、名前はここで引く。
+    /// トーストと掲示の帯が同じ名前を出すよう、この1か所から引くこと。
+    /// </remarks>
+    [JsonIgnore]
+    public string KindName => Special ? "熱中症特別警戒アラート" : "熱中症警戒アラート";
 }
 
 /// <summary><c>GET /api/alert</c> のレスポンス。</summary>

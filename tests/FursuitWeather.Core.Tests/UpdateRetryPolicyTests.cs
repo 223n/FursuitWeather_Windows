@@ -40,8 +40,51 @@ public sealed class UpdateRetryPolicyTests
     [Fact]
     public void 取得の回数に上限がある()
     {
-        Assert.False(UpdateRetryPolicy.IsDownloadExhausted(new UpdateAttempts { DownloadFailures = 4 }));
-        Assert.True(UpdateRetryPolicy.IsDownloadExhausted(new UpdateAttempts { DownloadFailures = 5 }));
+        Assert.False(UpdateRetryPolicy.IsDownloadExhausted(
+            new UpdateAttempts { DownloadFailures = 4, LastDownloadFailureAt = Now }, Now));
+        Assert.True(UpdateRetryPolicy.IsDownloadExhausted(
+            new UpdateAttempts { DownloadFailures = 5, LastDownloadFailureAt = Now }, Now));
+    }
+
+    [Fact]
+    public void 取得の上限は24時間で解ける()
+    {
+        // 累計で数えると、回線が悪かった数日のせいで自動の取得が二度と動かない
+        var attempts = new UpdateAttempts { DownloadFailures = 5, LastDownloadFailureAt = Now };
+
+        Assert.True(UpdateRetryPolicy.IsDownloadExhausted(attempts, Now.AddHours(24).AddTicks(-1)));
+        Assert.False(UpdateRetryPolicy.IsDownloadExhausted(attempts, Now.AddHours(24)));
+    }
+
+    [Fact]
+    public void 失敗の時刻が無い記録では上限を効かせない()
+    {
+        // 窓を決められないものを止める側へ倒すと、二度と解けない
+        Assert.False(UpdateRetryPolicy.IsDownloadExhausted(new UpdateAttempts { DownloadFailures = 99 }, Now));
+    }
+
+    [Fact]
+    public void 窓が明けたら取得の失敗を数え直す()
+    {
+        var attempts = new UpdateAttempts
+        {
+            Version = "0.3.1",
+            ExpectedSha256 = "a",
+            DownloadFailures = 5,
+            LastDownloadFailureAt = Now,
+            InstallFailures = 2,
+        };
+
+        var within = UpdateRetryPolicy.ExpireDownloadFailures(attempts, Now.AddHours(24).AddTicks(-1));
+        var after = UpdateRetryPolicy.ExpireDownloadFailures(attempts, Now.AddHours(24));
+
+        Assert.Equal(attempts, within);
+        Assert.Equal(0, after.DownloadFailures);
+        Assert.Null(after.LastDownloadFailureAt);
+
+        // インストールの記録と狙いには触れない
+        Assert.Equal(2, after.InstallFailures);
+        Assert.Equal("0.3.1", after.Version);
     }
 
     [Fact]

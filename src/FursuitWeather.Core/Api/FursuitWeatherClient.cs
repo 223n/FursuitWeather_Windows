@@ -129,6 +129,75 @@ public sealed class FursuitWeatherClient
         return alert ?? new AlertResponse();
     }
 
+    /// <summary>地点の検索で受け付ける文字数の上限。本体の <c>GEOCODING_MAX_QUERY_LENGTH</c> と同じ。</summary>
+    public const int MaxLocationQueryLength = 100;
+
+    /// <summary>主要都市の当日の天気を取る。</summary>
+    /// <param name="cancellationToken">取り消しの合図。</param>
+    /// <returns>取れた都市の天気。</returns>
+    /// <remarks>
+    /// 取れなかった都市は含まれない。1都市も取れなければAPIは502を返し、ここでは例外になる。
+    /// 1回の呼び出しが本体の側で都市の数だけ上流へ広がるため、取るのは掲示のあいだだけにする。
+    /// </remarks>
+    /// <exception cref="HttpRequestException">通信に失敗したとき。</exception>
+    /// <exception cref="JsonException">レスポンスを読めなかったとき。</exception>
+    public async Task<NationalResponse> GetNationalAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await _http
+            .GetAsync("api/national", HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        response.EnsureSuccessStatusCode();
+
+        var national = await response.Content
+            .ReadFromJsonAsync<NationalResponse>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
+
+        return national ?? throw new JsonException("全国の天気のレスポンスが空でした。");
+    }
+
+    /// <summary>地名か郵便番号で地点を探す。</summary>
+    /// <param name="query">検索語。前後の空白は落とす。</param>
+    /// <param name="cancellationToken">取り消しの合図。</param>
+    /// <returns>候補。見つからなければ空。</returns>
+    /// <remarks>
+    /// 利用者が押したときだけ呼ぶ。
+    /// 郵便番号で引いた座標は、市区町村の代表点になることがある。
+    /// </remarks>
+    /// <exception cref="ArgumentException">検索語が空か、長すぎるとき。</exception>
+    /// <exception cref="HttpRequestException">通信に失敗したとき。</exception>
+    /// <exception cref="JsonException">レスポンスを読めなかったとき。</exception>
+    public async Task<IReadOnlyList<GeocodeResult>> SearchLocationsAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var trimmed = query.Trim();
+        if (trimmed.Length == 0)
+        {
+            throw new ArgumentException("検索語が空です。", nameof(query));
+        }
+
+        if (trimmed.Length > MaxLocationQueryLength)
+        {
+            throw new ArgumentException("検索語が長すぎます。", nameof(query));
+        }
+
+        var path = "api/geocode?q=" + Uri.EscapeDataString(trimmed);
+        using var response = await _http
+            .GetAsync(path, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content
+            .ReadFromJsonAsync<GeocodeResponse>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
+
+        return result?.Results ?? [];
+    }
+
     /// <summary>デモデータを取る。気象APIへ接続できない環境の確認に使う。</summary>
     /// <param name="cancellationToken">取り消しの合図。</param>
     /// <returns>当日からの3日分の決まったデモデータ。</returns>

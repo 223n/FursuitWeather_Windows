@@ -226,7 +226,7 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 - `AppVersion`には完全なsemverを入れます（`1.2.0-rc.1`）
 - `VersionInfoVersion`には4桁の数値を入れます（`1.2.0.0`）
 - `PrivilegesRequired=lowest`にします。`PrivilegesRequiredOverridesAllowed`は空欄のままにします
-- `[Run]`で`WindowsAppRuntimeInstall.exe --quiet`を実行します
+- `CurStepChanged(ssPostInstall)`で`WindowsAppRuntimeInstall.exe --quiet`を実行し、終了コードを確かめます。更新から呼ばれたときは、そのあとで本体を起動し直します
 
 ### リリースへの組み込み
 

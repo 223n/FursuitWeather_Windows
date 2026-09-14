@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using FursuitWeather.Widget.Services;
+using FursuitWeather.Widget.Views;
 
 namespace FursuitWeather.Widget;
 
@@ -17,6 +18,17 @@ public partial class App : Application
     /// アンインストーラーは昇格しないため、この呼び出しも利用者の権限で走る。
     /// </remarks>
     private const string UninstallCleanupSwitch = "--uninstall-cleanup";
+
+    /// <summary>1つだけ動かすための名前。利用者のセッションごとに分かれる。</summary>
+    private const string InstanceName = @"Local\FursuitWeather.Widget";
+
+    /// <summary>2つ目の起動が、1つ目に小窓を出させる合図の名前。</summary>
+    private const string RevealName = @"Local\FursuitWeather.Widget.Reveal";
+
+    // どれも static で持つ。ローカル変数にすると GC でハンドルが閉じ、2つ目を見逃す
+    private static Mutex? _instance;
+    private static EventWaitHandle? _reveal;
+    private static RegisteredWaitHandle? _revealWait;
 
     /// <inheritdoc />
     protected override void OnStartup(StartupEventArgs e)
@@ -39,12 +51,110 @@ public partial class App : Application
             Environment.Exit(0);
         }
 
+        // 2つ目は、1つ目に小窓を出させて自分は終わる。
+        // 動かし続けると、トレイのアイコンも暑さの通知も二重になり、状態のファイルを奪い合う。
+        // 更新の途中で通知を押されて起動したときにも起きる
+        if (!ClaimSingleInstance())
+        {
+            Environment.Exit(0);
+        }
+
         // 無言で死なせない。
         // 小窓はタスクバーに出ず、Alt+Tabにも現れないため、
         // 落ちても利用者からは「起動しなかった」としか見えない
         DispatcherUnhandledException += OnUnhandledException;
 
         base.OnStartup(e);
+    }
+
+    /// <inheritdoc />
+    protected override void OnExit(ExitEventArgs e)
+    {
+        ReleaseSingleInstance();
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// このセッションで1つ目の起動かを確かめ、そうなら2つ目からの合図を待ち受ける。
+    /// </summary>
+    /// <returns>1つ目なら true。</returns>
+    /// <remarks>
+    /// <para>
+    /// 作れたかどうか（createdNew）では見分けない。
+    /// 2つ目がハンドルを持ったまま1つ目が終わると、持ち主のいないミューテックスが残り、
+    /// 3つ目が「作れなかった」と見て誰も動かない状態になる。
+    /// 実際に持てるかを <see cref="WaitHandle.WaitOne(int)"/> で確かめる。
+    /// </para>
+    /// <para>
+    /// 前の持ち主が解放せずに終わっていれば <see cref="AbandonedMutexException"/> になる。
+    /// そのときは持てているので、引き継ぐ。
+    /// </para>
+    /// </remarks>
+    private bool ClaimSingleInstance()
+    {
+        _instance = new Mutex(initiallyOwned: false, InstanceName);
+        _reveal = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, RevealName);
+
+        bool owned;
+        try
+        {
+            owned = _instance.WaitOne(0);
+        }
+        catch (AbandonedMutexException)
+        {
+            owned = true;
+        }
+
+        if (!owned)
+        {
+            _reveal.Set();
+            return false;
+        }
+
+        _revealWait = ThreadPool.RegisterWaitForSingleObject(
+            _reveal,
+            (_, _) => Dispatcher.BeginInvoke(() => (MainWindow as WidgetWindow)?.RevealForUser()),
+            state: null,
+            Timeout.Infinite,
+            executeOnlyOnce: false);
+        return true;
+    }
+
+    /// <summary>
+    /// 終えると決めたところで、1つ目の座を明け渡す。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ミューテックスは、明け渡さないとプロセスが消えるまで持ち主のまま残る。
+    /// 終わりかけのあいだに起動した2つ目は「もう動いている」と見て黙って終わり、
+    /// 最後に何も動いていない状態になる。
+    /// クラッシュの画面を出して OK を待っているあいだが、いちばん長い。
+    /// </para>
+    /// <para>
+    /// 持ち主の UI スレッドから呼ぶこと。ほかのスレッドからは明け渡せない。
+    /// </para>
+    /// </remarks>
+    private static void ReleaseSingleInstance()
+    {
+        _revealWait?.Unregister(null);
+        _revealWait = null;
+
+        if (_instance is not { } instance)
+        {
+            return;
+        }
+
+        _instance = null;
+        try
+        {
+            instance.ReleaseMutex();
+        }
+        catch (ApplicationException)
+        {
+            // 持っていなかった。明け渡すものが無い
+        }
+
+        instance.Dispose();
     }
 
     /// <summary>
@@ -67,6 +177,9 @@ public partial class App : Application
         ArgumentNullException.ThrowIfNull(e);
 
         var path = Path.Combine(WidgetSettings.Directory, "crash.txt");
+
+        // 画面で OK を待つあいだに起動し直されても、そちらが1つ目として動けるようにする
+        Safely(ReleaseSingleInstance);
 
         Safely(() =>
         {

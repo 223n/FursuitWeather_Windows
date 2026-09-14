@@ -8,6 +8,9 @@ public enum PollTarget
 
     /// <summary>環境省の熱中症警戒アラート。</summary>
     Alert,
+
+    /// <summary>主要都市の当日の天気。掲示のあいだだけ取る。</summary>
+    National,
 }
 
 /// <summary>ポーリングの間隔。</summary>
@@ -22,6 +25,9 @@ public static class PollInterval
 
     /// <summary>アラートを取りに行く間隔。</summary>
     public static readonly TimeSpan Alert = TimeSpan.FromMinutes(31);
+
+    /// <summary>全国の天気を取りに行く間隔。本体の <c>NATIONAL_POLL_MS</c> と同じ。</summary>
+    public static readonly TimeSpan National = TimeSpan.FromMinutes(31);
 
     /// <summary>失敗したあと、最初に待つ時間。</summary>
     public static readonly TimeSpan Retry = TimeSpan.FromSeconds(60);
