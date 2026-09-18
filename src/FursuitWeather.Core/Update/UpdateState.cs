@@ -44,14 +44,23 @@ public sealed record UpdateAttempts
 /// </remarks>
 public sealed record UpdateState
 {
+    /// <summary>
+    /// 更新の扱いの既定。
+    /// </summary>
+    /// <remarks>
+    /// 理由は <see cref="UpdateMode.Automatic"/> の注記にある。
+    /// 変えると、一度も選んでいない利用者の扱いも次の起動で変わる（<see cref="UpdateLedger.ApplyDefaultMode"/>）。
+    /// </remarks>
+    public const UpdateMode DefaultMode = UpdateMode.Automatic;
+
     /// <summary>更新の扱い方。</summary>
-    public UpdateMode Mode { get; init; } = UpdateMode.DownloadOnly;
+    public UpdateMode Mode { get; init; } = DefaultMode;
 
     /// <summary>
     /// 利用者が自分で選んだか。
     /// </summary>
     /// <remarks>
-    /// 既定値を将来変えるときに要る。
+    /// 既定値を変えるときに要る。
     /// <b>利用者が明示的に選んだ設定は上書きしない。</b>
     /// 一度も触っていない利用者にだけ新しい既定を当てる。
     /// </remarks>

@@ -446,4 +446,61 @@ public sealed class UpdateLedgerTests
         Assert.Equal(0, state.PromptCount);
         Assert.Equal(Now, state.LastPromptAt);
     }
+
+    // ---- 既定の扱い
+
+    [Fact]
+    public void 既定は自動で更新する()
+    {
+        Assert.Equal(UpdateMode.Automatic, new UpdateState().Mode);
+    }
+
+    [Fact]
+    public void 選んでいない利用者は前の既定から今の既定へ移る()
+    {
+        // 0.3.0までの既定のまま保存された端末。開いて保存しただけでは選んだことにならない
+        var saved = new UpdateState { Mode = UpdateMode.DownloadOnly, ModeChosenByUser = false };
+
+        var state = UpdateLedger.ApplyDefaultMode(saved);
+
+        Assert.Equal(UpdateMode.Automatic, state.Mode);
+        Assert.False(state.ModeChosenByUser);
+    }
+
+    [Theory]
+    [InlineData(UpdateMode.DownloadOnly)]
+    [InlineData(UpdateMode.NotifyOnly)]
+    [InlineData(UpdateMode.Automatic)]
+    public void 自分で選んだ扱いは上書きしない(UpdateMode chosen)
+    {
+        var saved = new UpdateState { Mode = chosen, ModeChosenByUser = true };
+
+        Assert.Same(saved, UpdateLedger.ApplyDefaultMode(saved));
+    }
+
+    [Fact]
+    public void すでに既定なら同じものを返す()
+    {
+        // 同じものを返せば、呼び元は書き直しが要らないと分かる
+        var saved = new UpdateState();
+
+        Assert.Same(saved, UpdateLedger.ApplyDefaultMode(saved));
+    }
+
+    [Fact]
+    public void 既定を当てても進み具合には触らない()
+    {
+        // 取得を終えて押されるのを待っていた端末。次の起動で自動の適用へ進む
+        var saved = new UpdateState
+        {
+            Mode = UpdateMode.DownloadOnly,
+            Stage = UpdateStage.Downloaded,
+            TargetVersion = "0.4.0",
+            ExpectedSha256 = Sha,
+        };
+
+        var state = UpdateLedger.ApplyDefaultMode(saved);
+
+        Assert.Equal(saved with { Mode = UpdateMode.Automatic }, state);
+    }
 }
