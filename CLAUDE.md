@@ -52,7 +52,7 @@ dotnet format --verify-no-changes
 Inno Setupが要ります。
 
 ```powershell
-./scripts/build-installer.ps1              # 配布用（164.5MB、5分ほど）
+./scripts/build-installer.ps1              # 配布用（v0.3.0で182,051,527バイト、5分ほど）
 ./scripts/build-installer.ps1 -SkipRuntime # 組み立ての確認だけ
 ```
 
@@ -177,5 +177,5 @@ gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.base
 
 - `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
 - コード署名をしていません。SmartScreenの警告が出ます
-- トーストのボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります
+- 暑さの通知のトーストにボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります。トレイの案内のトーストだけは、設定を開くボタンを持ちます
 - 掲示モード（`docs/display.md`）は、実機での確認が残っています

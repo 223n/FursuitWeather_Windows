@@ -213,7 +213,7 @@
                     <TextBlock Text="更新の扱い" FontWeight="Bold" />
                     <RadioButton x:Name="UpdateAutomaticRadio" Margin="0,8,0,0" GroupName="UpdateMode">
                         <StackPanel>
-                            <TextBlock Text="自動で更新する" />
+                            <TextBlock Text="自動で更新する（推奨）" />
                             <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
                                        Text="確認・取得・インストールまで自動で行います。インストールのあいだ20秒ほどアプリが止まり、自動で起動し直します。" />
                             <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
@@ -222,7 +222,7 @@
                     </RadioButton>
                     <RadioButton x:Name="UpdateDownloadOnlyRadio" Margin="0,8,0,0" GroupName="UpdateMode">
                         <StackPanel>
-                            <TextBlock Text="取得だけ自動で行う（推奨）" />
+                            <TextBlock Text="取得だけ自動で行う" />
                             <TextBlock FontSize="11" Foreground="#4A4A4A" TextWrapping="Wrap"
                                        Text="新しい版を裏で受け取っておき、インストールする時期はあなたが決めます。" />
                         </StackPanel>

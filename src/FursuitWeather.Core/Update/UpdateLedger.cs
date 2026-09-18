@@ -187,6 +187,33 @@ public static class UpdateLedger
     }
 
     /// <summary>
+    /// 扱いを一度も選んでいない利用者に、いまの既定を当てる。
+    /// </summary>
+    /// <param name="state">読み込んだ状態。</param>
+    /// <returns>当てたあとの状態。当てるものが無ければ同じもの。</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>利用者が自分で選んだ扱いは上書きしない。</b>
+    /// 一度も触っていない利用者だけが、既定の変更についていく。
+    /// </para>
+    /// <para>
+    /// 保存してある値は、書いた版のときの既定にすぎない。
+    /// 読むたびに当て直さないと、既定を変えても前から使っている端末には届かない。
+    /// </para>
+    /// </remarks>
+    public static UpdateState ApplyDefaultMode(UpdateState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.ModeChosenByUser || state.Mode == UpdateState.DefaultMode)
+        {
+            return state;
+        }
+
+        return state with { Mode = UpdateState.DefaultMode };
+    }
+
+    /// <summary>
     /// 利用者が中断の記録を確かめたことを書き入れる。
     /// </summary>
     /// <param name="state">いまの状態。</param>

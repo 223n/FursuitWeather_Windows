@@ -24,21 +24,31 @@ namespace FursuitWeather.Core.Update;
 public enum UpdateMode
 {
     /// <summary>取得も適用も自動。</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>これを既定にする。</b>
+    /// 割り込めない状態、起動の直後、掲示のあいだ、設定画面を開いているあいだは、適用のゲートが先送りする。
+    /// </para>
+    /// <para>
+    /// 当初は、未署名のあいだはSmartScreenで止まるおそれがあるとして <see cref="DownloadOnly"/> を既定にしていた。
+    /// 2026年9月11日の実機の通しでは、アプリが起動した未署名のインストーラーは止まらずに入れ替わった。
+    /// ただし1回だけの記録である。経緯は <c>docs/update.md</c> の「既定値」にある。
+    /// </para>
+    /// </remarks>
     Automatic,
 
     /// <summary>
     /// 取得だけ自動。適用は利用者が決める。
     /// </summary>
     /// <remarks>
-    /// <b>これを既定にする。</b>
-    /// 未署名のあいだに <see cref="Automatic"/> を既定にすると、
-    /// 自動のはずが席にいない利用者のSmartScreenの操作を待つことになる。
-    /// <see cref="NotifyOnly"/> を既定にすると、
-    /// self-containedにした <c>.NET</c> 自体の修正すら届かない。
+    /// 押すのは1回で、押した瞬間に待ち時間が無い。
     /// </remarks>
     DownloadOnly,
 
     /// <summary>お知らせのみ。取得も適用もボタンを押したときだけ。</summary>
+    /// <remarks>
+    /// 既定にはしない。self-containedにした <c>.NET</c> 自体の修正すら届かなくなる。
+    /// </remarks>
     NotifyOnly,
 }
 
