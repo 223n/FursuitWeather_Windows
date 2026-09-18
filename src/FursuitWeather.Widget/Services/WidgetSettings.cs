@@ -90,6 +90,15 @@ public sealed record WidgetSettings
     /// </remarks>
     public bool StartInDisplay { get; init; }
 
+    /// <summary>
+    /// トレイのアイコンを表へ出す案内を済ませたか。
+    /// </summary>
+    /// <remarks>
+    /// 利用者が選ぶ値ではなく、アプリが1回だけ書く。
+    /// 判断は <c>TrayGuide.Decide</c> にある。
+    /// </remarks>
+    public bool TrayGuideShown { get; init; }
+
     /// <summary>設定を置くディレクトリ。</summary>
     public static string Directory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -178,6 +187,17 @@ public sealed record WidgetSettings
     /// </remarks>
     public static void SaveWindowPosition(double left, double top) =>
         (Load() with { WindowLeft = left, WindowTop = top }).Save();
+
+    /// <summary>
+    /// トレイの案内を済ませたことだけを書く。
+    /// </summary>
+    /// <remarks>
+    /// 位置と同じく、ディスクの内容を読み直してから差し替える。
+    /// 呼び元は手元の設定にも同じ印を立てること。
+    /// 立てないと、設定画面で保存したときに手元の古い値で印が消え、次の起動でまた案内する。
+    /// </remarks>
+    public static void MarkTrayGuideShown() =>
+        (Load() with { TrayGuideShown = true }).Save();
 
     /// <summary>
     /// 設定を書く。失敗しても本体は止めない。
