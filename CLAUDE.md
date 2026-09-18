@@ -52,7 +52,7 @@ dotnet format --verify-no-changes
 Inno Setupが要ります。
 
 ```powershell
-./scripts/build-installer.ps1              # 配布用（164.5MB、5分ほど）
+./scripts/build-installer.ps1              # 配布用（v0.3.0で182,051,527バイト、5分ほど）
 ./scripts/build-installer.ps1 -SkipRuntime # 組み立ての確認だけ
 ```
 
