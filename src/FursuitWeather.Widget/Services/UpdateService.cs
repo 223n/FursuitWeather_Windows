@@ -174,7 +174,8 @@ public sealed class UpdateService : IDisposable
         _manifestUrl = manifestUrl;
         Running = ReadRunningVersion();
         _phase = DevicePhase();
-        _state = UpdateStateStore.Load();
+        // 一度も選んでいない利用者には、保存した版のときではなく、いまの既定を当てる
+        _state = UpdateLedger.ApplyDefaultMode(UpdateStateStore.Load());
         ResumeDisplayRequested = _state.ResumeDisplayAfterInstall;
 
         // 前のプロセスで確認していれば、「まだ確認していません」とは出さない。
