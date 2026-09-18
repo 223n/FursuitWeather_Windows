@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -159,6 +160,78 @@ public sealed class ToastNotifier : IDisposable
             return false;
         }
     }
+
+    /// <summary>
+    /// 押すと別の場所を開くボタンを付けて、通知を出す。
+    /// </summary>
+    /// <param name="title">見出し。</param>
+    /// <param name="lines">本文。最大2行まで使われる。</param>
+    /// <param name="buttonText">ボタンの文字。</param>
+    /// <param name="target">ボタンで開く先。</param>
+    /// <returns>出せたら true。</returns>
+    /// <remarks>
+    /// ボタンは開く先を Windows に直接渡す。
+    /// このアプリの活性化を通らないため、アプリが終わったあとに押されても動く。
+    /// </remarks>
+    public bool ShowWithLink(string title, IReadOnlyList<string> lines, string buttonText, Uri target)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(buttonText);
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (!IsAvailable)
+        {
+            return false;
+        }
+
+        try
+        {
+            var builder = new AppNotificationBuilder().AddText(title);
+            foreach (var line in lines.Take(2))
+            {
+                builder = builder.AddText(line);
+            }
+
+            builder = builder.AddButton(new AppNotificationButton(buttonText).SetInvokeUri(target));
+
+            AppNotificationManager.Default.Show(builder.BuildNotification());
+            return true;
+        }
+        catch (Exception e) when (e is COMException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 活性化の種類が通知かを、別のスレッドで読む。
+    /// </summary>
+    /// <returns>通知だと読めたら true。</returns>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Initialize"/> で登録したあとに呼ぶ。
+    /// <c>GetActivatedEventArgs</c> は <c>Register</c> より後に呼ぶ決まりがある（<c>docs/architecture.md</c> の「通知」）。
+    /// </para>
+    /// <para>
+    /// <b>通知の引数を持って起動されたのに COM の呼び出しが来ないと、2秒ほど待ってから <see cref="TimeoutException"/> を投げる。</b>
+    /// HRESULT は <c>0x800705B4</c>。実機で確かめた。
+    /// 捕まえ損ねた版は、起動の途中で落ちた。
+    /// UIのスレッドで呼ぶと、落ちなくてもそのあいだ起動が止まるため、別のスレッドで読む。
+    /// </para>
+    /// </remarks>
+    public static Task<bool> ReadNotificationActivationAsync() => Task.Run(() =>
+    {
+        try
+        {
+            return AppInstance.GetCurrent().GetActivatedEventArgs().Kind == ExtendedActivationKind.AppNotification;
+        }
+        catch (Exception e) when (e is TimeoutException or COMException or InvalidOperationException
+            or TypeInitializationException or DllNotFoundException)
+        {
+            return false;
+        }
+    });
 
     /// <summary>
     /// 登録を解く。

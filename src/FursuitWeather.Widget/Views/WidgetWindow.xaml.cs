@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FursuitWeather.Core.Api;
 using FursuitWeather.Core.Display;
 using FursuitWeather.Core.Notifications;
@@ -61,6 +62,9 @@ public partial class WidgetWindow : Window, IDisposable
     private bool _hotKeyRegistered;
     private bool _selfTestDetector;
     private bool _closed;
+
+    /// <summary>どこから起動されたか。診断に出す。</summary>
+    private LaunchSource _launchSource;
 
     /// <summary>小窓を作る。</summary>
     public WidgetWindow()
@@ -139,6 +143,17 @@ public partial class WidgetWindow : Window, IDisposable
         // NotificationInvoked を Register より先に付ける。順序を誤ると
         // 通知の処理のために新しいプロセスが起動する
         ApplyNotificationSetting(initial: true);
+
+        // 通知を押して起動されたときも、動いているときに押されたのと同じ扱いにする。
+        // 見分けるのは起動の引数で足りる。Windows App SDK が通知の COM サーバーとして、
+        // この引数を付けた起動の行を登録するためである
+        _launchSource = NotificationLaunch.Classify(activatedAsNotification: false, Environment.GetCommandLineArgs());
+        if (_launchSource != LaunchSource.Normal)
+        {
+            ApplyLayer(ShowRequest.Notification);
+            _ = ConfirmNotificationActivationAsync();
+        }
+
         StartService();
         // 明示的に作る。作られていないとクリックスルーの解除の経路が1つ減る。
         // 引数を省くと、H.NotifyIcon はプロセス全体を効率モード（EcoQoS と IDLE の優先度）にする。
@@ -188,6 +203,9 @@ public partial class WidgetWindow : Window, IDisposable
         {
             DeliverStartupUpdateToast();
         }
+
+        // 起動の処理と、掲示を始める処理が済んでから決める
+        Dispatcher.BeginInvoke(ShowTrayGuideIfNeeded, DispatcherPriority.ApplicationIdle);
 
         Closed += (_, _) =>
         {
@@ -1142,6 +1160,72 @@ public partial class WidgetWindow : Window, IDisposable
         _toast.Show(toast.Title, toast.Lines);
     }
 
+    /// <summary>
+    /// 通知から起動されたとき、活性化の種類も読んで診断に残す。
+    /// </summary>
+    /// <remarks>
+    /// 扱いは起動の引数で決まっており、ここでは変えない。
+    /// 種類を読む <c>GetActivatedEventArgs</c> は、COM の呼び出しが来ないと待ったうえで例外を投げるため、
+    /// UIのスレッドを待たせずに読む（<see cref="ToastNotifier.ReadNotificationActivationAsync"/>）。
+    /// 登録していなければ読まない。COM の呼び出しを受ける口が無く、待つだけになるためである。
+    /// </remarks>
+    private async Task ConfirmNotificationActivationAsync()
+    {
+        if (!_toast.IsRegistered)
+        {
+            return;
+        }
+
+        if (await ToastNotifier.ReadNotificationActivationAsync().ConfigureAwait(true))
+        {
+            _launchSource = LaunchSource.NotificationActivation;
+        }
+    }
+
+    /// <summary>
+    /// トレイのアイコンを表へ出すよう、初回に1回だけ案内する。
+    /// </summary>
+    /// <remarks>
+    /// 出すかどうかは <see cref="TrayGuide.Decide"/> が決める。
+    /// トーストを出せなければトレイのバルーンへ倒す。どちらも出せなくても、済んだと記録する。
+    /// 起動のたびに試すと、通知を出せない端末で毎回バルーンを出し続けるためである。
+    /// </remarks>
+    private void ShowTrayGuideIfNeeded()
+    {
+        if (_closed || _teardown)
+        {
+            return;
+        }
+
+        var action = TrayGuide.Decide(
+            alreadyShown: _settings.TrayGuideShown,
+            displayActive: _startInDisplay || _display is not null,
+            notificationsEnabled: _settings.NotificationsEnabled,
+            promoted: TrayIconPromotion.IsPromoted(Environment.ProcessPath));
+
+        if (action == TrayGuideAction.None)
+        {
+            return;
+        }
+
+        if (action == TrayGuideAction.Show &&
+            !_toast.ShowWithLink(TrayGuide.Title, TrayGuide.Lines, TrayGuide.ButtonText, TrayGuide.SettingsUri))
+        {
+            try
+            {
+                TrayIcon.ShowNotification(TrayGuide.Title, string.Join(Environment.NewLine, TrayGuide.Lines));
+            }
+            catch (InvalidOperationException)
+            {
+                // バルーンも出せなければ、READMEの案内だけが残る
+            }
+        }
+
+        // 手元の設定にも立てる。立てないと、設定画面で保存したときに印が消える
+        WidgetSettings.MarkTrayGuideShown();
+        _settings = _settings with { TrayGuideShown = true };
+    }
+
     /// <summary>掲示へ、いま手元にある材料を渡す。</summary>
     /// <remarks>
     /// 掲示を出していなければ何もしない。
@@ -1197,6 +1281,9 @@ public partial class WidgetWindow : Window, IDisposable
                 $"ホットキー(Ctrl+Alt+F): {(_hotKeyRegistered ? "登録できている" : "登録できていない")}")
             .AppendLine(CultureInfo.InvariantCulture,
                 $"通知: 設定で{(_settings.NotificationsEnabled ? "入" : "切")} / 登録{(_toast.IsRegistered ? "済" : "なし")} / {_toast.DescribeSetting()}")
+            .AppendLine(CultureInfo.InvariantCulture, $"起動の経路: {NotificationLaunch.Describe(_launchSource)}")
+            .AppendLine(CultureInfo.InvariantCulture,
+                $"トレイの案内: {(_settings.TrayGuideShown ? "済み" : "まだ")} / アイコンを表に出しているか: {DescribePromotion(TrayIconPromotion.IsPromoted(Environment.ProcessPath))}")
             .AppendLine(CultureInfo.InvariantCulture, $"自動起動: {StartupRegistration.GetState()}")
             .AppendLine(CultureInfo.InvariantCulture, $"小窓の高さ: {_settings.Layer}")
             .AppendLine(CultureInfo.InvariantCulture,
@@ -1218,6 +1305,13 @@ public partial class WidgetWindow : Window, IDisposable
 
         ShowDialog(text, MessageBoxImage.Information);
     }
+
+    private static string DescribePromotion(bool? promoted) => promoted switch
+    {
+        true => "出している",
+        false => "出していない",
+        null => "読めない",
+    };
 
     private void OnExit(object sender, RoutedEventArgs e) => ShutdownApp();
 
