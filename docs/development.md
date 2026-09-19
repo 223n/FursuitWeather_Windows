@@ -1,6 +1,8 @@
 # 開発環境とCI
 
 必要な道具と、既存のリポジトリの運用にC#を載せるための変更をまとめます。
+着手前に計画として書いた項目は、ほとんど入れ終えています。
+まだ入れていないものは、その項に「まだ入れていません」と書いています。
 
 ## 必要なもの
 
@@ -21,6 +23,10 @@ git flow feature start 変更の名前
 
 ## 最初のマイルストーン
 
+3つのStepはどれも済んでいます。
+以下は着手前に立てた計画です。
+あとで変えたところと、確かめた結果を書き添えています。
+
 ### Step 1 見た目が破綻しないことを確かめる
 
 手で書いたJSONを描くだけの透過の小窓を1枚作ります。
@@ -36,6 +42,8 @@ git flow feature start 変更の名前
 何よりも先に潰してください。
 ここで文字が読めなければ、フォントの大きさと太さとコントラストの設計をやり直します。
 
+3つとも、2026年9月9日に実機で確かめました（[未決事項](open-questions.md)の「確かめていない技術的な前提」）。
+
 ### Step 2 実際のAPIにつないで常駐させる
 
 `FursuitWeather.Core`にDTOとAPIクライアントを実装します。
@@ -45,24 +53,29 @@ DTOは`openapi.yaml`から生成を試み、駄目なら`types.ts`を見て手�
 ウィンドウの側は、最背面への固定、位置の物理ピクセルでの保存、クリックスルーの切り替えを入れます。
 ここまでで「壁紙の上へ置きっぱなしにできる」状態になります。
 
+最背面への固定は、のちにやめて最前面にしました。
+実測で、目的と正反対の挙動になると分かったためです（[未決事項](open-questions.md)の「小窓の高さ」）。
+
 ### Step 3 トレイと通知
 
 `H.NotifyIcon.Wpf`でトレイに常駐します。
 メニューには表示と非表示、クリックスルーの切り替え、設定、終了を置きます。
 
 `AppNotificationManager`を登録し、判定の悪化を通知します。
-悪化の定義は先に決めてください（[未決事項](open-questions.md)を見てください）。
-`IsSupported`が偽のときのバルーンへの退避も入れます。
+悪化の定義は、[通知の設計](notifications.md)で決めました。
+トーストを出せないときは、小窓とトレイのバルーンで代わりに知らせます。
+出せるかどうかは`IsSupported`ではなく、登録できたかと、Windowsの通知の設定が有効かで決めています（`ToastNotifier.IsAvailable`）。
 
 **このStepの最初に、`Register()`が実際に動くかを単体で確かめてください。**
 Windows App SDK 2.4.0を未パッケージのWPFで使った実績を、調査では確認できませんでした。
+2026年9月9日に確かめ、動きました（[未決事項](open-questions.md)の「確かめていない技術的な前提」）。
 
 ## 既存のリポジトリに足すもの
 
 ### 最優先
 
-`.gitignore`に`.NET`の項目がまったくありません。
-C#のプロジェクトを作る前に足します。
+`.gitignore`へ`.NET`の項目を足してあります。
+テンプレートには1つも無かったため、C#のプロジェクトを作る前に足しました。
 
 ```text
 bin/
@@ -72,29 +85,34 @@ obj/
 TestResults/
 ```
 
-あわせて`*.pfx`と`*.snk`と`*.p12`も足します。
-署名の証明書を誤って入れると履歴の書き換えが要り、ブランチ保護と衝突します。
+あわせて`*.pfx`と`*.snk`と`*.p12`も足してあります。
+署名の証明書を誤って入れると履歴の書き換えが要り、ブランチ保護と衝突するためです。
 
-### 新しく置くファイル
+### 新しく置いたファイル
 
 - `global.json`。SDKの版を固定します
 - `Directory.Build.props`。共通の設定と版の導出を集約します
 - `Directory.Packages.props`。依存の版を集約します
 
-`Directory.Build.props`には次を入れます。
+`Directory.Build.props`には次を入れてあります。
 
 ```xml
 <Nullable>enable</Nullable>
 <EnableNETAnalyzers>true</EnableNETAnalyzers>
 <AnalysisMode>Recommended</AnalysisMode>
 <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 ```
+
+ロックファイル（`RestorePackagesWithLockFile`と`dotnet restore --locked-mode`）は使いません。
+当初は入れる計画でしたが、一度も入れないまま運用しており、2026年9月19日に計画から外しました。
+直接の依存の版は`Directory.Packages.props`で固定しています。
+取得元は既定のnuget.orgだけで、`nuget.config`は置いていません。
+nuget.orgは公開した版の中身を差し替えられないため、ロックファイルで増える守りは小さいと判断しました。
 
 `TreatWarningsAsErrors`はプロジェクトファイルに書かず、CIの`-warnaserror`に任せます。
 手元の試行錯誤を止めないためです。
 
-アプリ側のプロジェクトには`Platforms`と`RuntimeIdentifiers`を明示します。
+アプリ側のプロジェクトには`Platforms`と`RuntimeIdentifiers`を明示してあります。
 Windows App SDKはAnyCPUに対応しません。
 
 ### 版の同期
@@ -106,19 +124,24 @@ Windows App SDKはAnyCPUに対応しません。
 MSBuildの静的プロパティ関数の許可リストに`System.IO.File::ReadAllText`と`Regex`が入っているため、`Directory.Build.props`から`package.json`を直接読めます。
 これで`release.yml`を1行も変えずに済みます。
 
-**この方法は未検証です。**
-導入したら`dotnet msbuild -getProperty:Version`で値を必ず確かめてください。
+この読み方は、導入したときに`dotnet msbuild -getProperty:Version`で確かめました。
+`0.2.0`と`1.2.0-rc.1`のどちらでも、期待どおりの値になりました。
+`Directory.Build.props`を変えたときは、同じコマンドで確かめ直してください。
 
 ### ワークフロー
 
-`ci.yml`には`build-dotnet`のジョブを足してあります。
-`FursuitWeather.Core`はWindowsに依存しないため、いまはLinuxのランナーで復元・書式検査・ビルド・テストを回しています。
+`ci.yml`には`.NET`のジョブが2つあります。
 
-WPFのプロジェクトを足したときは、Windowsのランナーで動くジョブを別に設けます。
+- `build-core`（Linux）。`FursuitWeather.Core`とそのテストだけを、復元・ビルド・テストします。`Core`はWindowsに依存しないため、Linuxで回せます
+- `build-windows`（Windows）。WPFを含むソリューション全体を、`dotnet restore`、`dotnet format --verify-no-changes`、`dotnet build -warnaserror`、`dotnet test`の順に回します
 
-**`vars.RUNS_ON`を使い回さないでください。**
-既存の3つのジョブ（`lint-ja`、`lint-workflows`、`zizmor`）はLinuxのセルフホストを想定しています。
-`RUNS_ON_WINDOWS`のような別の変数を新しく作ります。
+書式の検査は`build-windows`だけで行います。
+ソリューション全体が対象のため、`Core`の書式もここで検査されます。
+
+**`vars.RUNS_ON`をWindowsのジョブに使い回さないでください。**
+`vars.RUNS_ON`は、Linuxのセルフホストのランナーを指す変数です。
+`ci.yml`の`lint-ja`、`build-core`、`lint-workflows`、`zizmor`をはじめ、Linuxのジョブはすべてこれを使います。
+Windowsのジョブには、別の変数`RUNS_ON_WINDOWS`を使います。
 
 ```yaml
 runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-2025' }}
@@ -127,9 +150,9 @@ runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-2025' }}
 `ci.yml`の`build-windows`と`installer.yml`は、この形で書いてあります。
 `installer.yml`は、`windows-2025`のイメージに同梱されたInno Setup 6を使います（[構成](architecture.md)の「組み立て方」）。
 
-中身は`dotnet restore --locked-mode`、`dotnet format --verify-no-changes`、`dotnet build -warnaserror`、`dotnet test`の順にします。
-
-`codeql.yml`はmatrixを`language: [actions]`から`include`の形に変え、`csharp`と`build-mode`を足します。
+C#の走査は、まだ入れていません。
+いまの`codeql.yml`が見ているのは、ワークフロー（`language: [actions]`）だけです。
+入れるときは、matrixを`include`の形に変え、`csharp`と`build-mode`を足します。
 タイムアウトも30分では足りなくなる見込みです。
 
 `zizmor`のジョブは`advanced-security: false`のため、指摘が1件でもあると落ちます。
@@ -142,13 +165,19 @@ runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-2025' }}
 シェルへ渡すときは`${{ env.VAR }}`ではなく`${VAR}`で展開させてください。
 
 Windowsのビルドを必須のチェックにすると、ワークフローが開いたPull RequestのCIが承認待ちになり、`auto_merge`が止まります。
-必須にしないか、`auto_merge`を使わないかのどちらかを選びます。
+いまは必須にしていません。
+`develop`と`main`のルールセットには、必須のステータスチェックの規則がありません。
 
-**インストーラーの生成は`ci.yml`に置きません。**
-`release-publish.yml`の側に置きます。
-必須のチェックにすると、いま述べた`auto_merge`の問題に当たるためです。
+**インストーラーの生成は`ci.yml`に置いていません。**
+`installer.yml`に分け、`release-publish.yml`から呼びます。
+組み立てに関わるファイルを変えたPull Requestでも動きますが、必須のチェックにはしていません。
+必須にすると、いま述べた`auto_merge`の問題に当たるためです。
 
 ### Dependabotとラベル
+
+この項は、まだ入れていません。
+いまのDependabotが見ているのは、npmとGitHub Actionsだけです。
+入れるときは、次のようにします。
 
 `nuget`のエントリを2つ（`develop`向けと既定ブランチ向け）と、`dotnet-sdk`のエントリを1つ足します。
 
@@ -161,12 +190,12 @@ Windowsのビルドを必須のチェックにすると、ワークフローが�
 `.github/labels.yml`に`NuGet`のラベルを足し、**先に「ラベルを同期する」ワークフローを動かします。**
 リポジトリに無いラベルはDependabotが黙って無視します。
 
-`.github/labeler.yml`の「依存関係」の対象へ、`**/*.csproj`、`Directory.Packages.props`、`**/packages.lock.json`、`global.json`を足します。
+`.github/labeler.yml`の「依存関係」の対象へ、`**/*.csproj`、`Directory.Packages.props`、`global.json`を足します。
 
 ### 設定ファイル
 
-`.editorconfig`の末尾に足します。
-既存の`[*]`（2スペース、改行はLF）は変えません。
+`.editorconfig`の末尾に足してあります。
+既存の`[*]`（2スペース、改行はLF）は変えていません。
 より細かいセクションが後勝ちするため衝突しません。
 
 ```ini
@@ -178,7 +207,7 @@ tab_width = 4
 Microsoftが配る既定の`.editorconfig`をそのまま貼らないでください。
 `end_of_line = crlf`と`insert_final_newline = false`が既存の方針と衝突します。
 
-`.gitattributes`には次を足します。
+`.gitattributes`には次を足してあります。
 
 ```text
 *.cmd text eol=crlf
@@ -188,7 +217,7 @@ Microsoftが配る既定の`.editorconfig`をそのまま貼らないでくだ�
 *.snk binary
 ```
 
-`* text=auto eol=lf`の方針自体は保ちます。
+`* text=auto eol=lf`の方針自体は保っています。
 gitがコミットのときに正規化するため、Visual StudioがCRLFで書いても実害のある衝突は起きません。
 
 ### 手で起動して確かめるときの注意
@@ -214,7 +243,8 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 ### 日本語Lintとの共存
 
 `package.json`の`lint`に`dotnet format`を混ぜないでください。
-`ci.yml`の日本語Lintのジョブ（`lint-ja`）はUbuntuで動き、.NET SDKがありません。
+`ci.yml`の日本語Lintのジョブ（`lint-ja`）はUbuntuで動き、`.NET`を用意しません。
+ソリューションにはWPFのプロジェクトがあり、Linuxではビルドできません。
 混ぜるとこのジョブが落ちます。
 足すなら`lint`とは別の名前にします。
 
@@ -222,7 +252,7 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 
 配布方式の根拠は[技術選定](stack.md)の「配布方式」にあります。
 
-定義は`installer/FursuitWeather.iss`に置きます。
+定義は`installer/FursuitWeather.iss`に、組み立ての手順は`scripts/build-installer.ps1`にあります。
 要点は次のとおりです。
 
 - `AppId`は生成したGUIDを固定し、以後変えません。変えると別のアプリとして二重に入ります
@@ -233,26 +263,36 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 
 ### リリースへの組み込み
 
-`release-publish.yml`を3つのジョブに割ります。
+`release-publish.yml`は、次の6つのジョブでリリースを公開します。
 
-1. `publish`（Ubuntu、既存を縮小）。タグを打つところまでを行います
-1. `installer`（Windows、新設）。`dotnet publish`と`iscc`を実行し、チェックサムを作って成果物として上げます
-1. `release`（Ubuntu、新設）。成果物を取り、GitHub Releaseを作ります。既存の「mainをdevelopへ戻す」もここへ移します
+1. `publish`（Linux）。タグを打ち、GitHub Releaseを下書きで作り、`main`を`develop`へ戻します
+1. `installer`（Windows）。`installer.yml`を呼び、インストーラーを組み立ててReleaseへ添えます
+1. `manifest`（Linux）。インストーラーの大きさとハッシュから、更新のマニフェスト（`update.json`）を作ります
+1. `sign`（Linux）。マニフェストへ署名します。承認が要るのは、このジョブだけです
+1. `attach`（Linux）。マニフェストと署名をReleaseへ添えます
+1. `finalize`（Linux）。下書きを外して公開します
 
-**`publish`ジョブにはjob levelの`outputs`がありません。**
-このままでは版を後続のジョブへ渡せないため、`release.yml`の`prepare`ジョブと同じ形で足します。
+Releaseは、すべてを添え終えるまで下書きのままです。
+途中で落ちても、利用者からは見えません。
+署名のジョブを分けた理由は、[更新の仕組み](update.md)の「承認が要るのは署名だけです」にあります。
 
-`installer`ジョブには`defaults`で`shell: bash`を指定します。
-既存のステップがPOSIXのシェルを前提にしており、Windowsのランナーの既定は`pwsh`のためです。
+当初は`publish`・`installer`・`release`の3つに割る計画でした。
+下書きで作ってから公開する形と、マニフェストの署名を足したため、いまの6つになっています。
 
-版の決定は`release.yml`が使っているのと同じ`node -p "require('./package.json').version"`にします。
-`Directory.Build.props`から読む方式は未検証のため、CIの版の決定をそこに依存させません。
+`publish`は、版とタグを`outputs`で後続のジョブへ渡します。
+`release.yml`の`prepare`ジョブと同じ形です。
 
-`iscc`がランナーのPATHに載っているかは未確認です。
-載っていなければフルパスで叩きます。
+Windowsのランナーの既定のシェルは`pwsh`です。
+`installer.yml`は`defaults`を置かず、ステップごとに`shell:`を書いています。
+組み立てと後始末の確認は`pwsh`、同梱の確認とReleaseへの添付は`bash`で動きます。
 
-ビルド時間は3分から6分と**推定**します。
-ツールの導入が要らないためですが、実測ではありません。
+インストーラーの版は、`scripts/build-installer.ps1`が`package.json`から直接読みます。
+ここでも、版の単一の情報源は`package.json`です。
+
+`ISCC.exe`は、インストール先の候補とPATHから探します（[構成](architecture.md)の「組み立て方」）。
+
+`v0.4.0`のリリースでは、`installer`のジョブが5分22秒で終わりました。
+着手前の推定は3分から6分でした。
 
 ## 署名と配布
 
@@ -283,12 +323,12 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 
 日本在住の個人はAzure Artifact Signingを使えません。
 
-当面は「未署名でGitHub Releasesに置き、SmartScreenの警告が出ることをREADMEに明記する」と割り切るかどうかを、別に決める必要があります。
+当面は未署名のままGitHub Releasesに置き、SmartScreenの警告が出ることを[README](../README.md)に書いています。
 
 ## 検査の空洞化に注意
 
 `release.yml`のprepareジョブはUbuntuで動き、実行されるのは`npm run lint`（文書の検査）だけです。
 WPFはWindowsでしかビルドできないため、アプリのビルドの検証はここに入りません。
 
-緩和策として`FursuitWeather.Core`をUIに依存させず、ロジックのテストだけはUbuntuで回せるようにします。
+緩和策として`FursuitWeather.Core`をUIに依存させず、ロジックのテストだけはUbuntuで回せるようにしてあります（`ci.yml`の`build-core`）。
 [構成](architecture.md)のプロジェクトの分け方は、これを意図しています。

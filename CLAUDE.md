@@ -57,7 +57,8 @@ Inno Setupが要ります。
 ```
 
 `package.json`の`lint`に`dotnet format`を混ぜないでください。
-`ci.yml`の日本語LintのジョブはUbuntuで動き、`.NET`のSDKがありません。
+`ci.yml`の日本語LintのジョブはUbuntuで動き、`.NET`を用意しません。
+ソリューションのWPFのプロジェクトは、Linuxではビルドできません。
 
 ## 決まっている技術構成
 
@@ -104,7 +105,7 @@ Cloudflareのinvocation logがクエリ文字列を丸めずに記録するた�
 どれも複数のファイルを読まないと気付けないものです。
 
 - **版の単一情報源は`package.json`です。** `release.yml`の`npm version`が書き換えます。`.csproj`に`Version`を直書きして二重管理にしないでください
-- **`vars.RUNS_ON`をWindowsのジョブに使い回さないでください。** 既存の3ジョブはLinuxのセルフホストを想定しています。`RUNS_ON_WINDOWS`のような別の変数を作ります
+- **`vars.RUNS_ON`をWindowsのジョブに使い回さないでください。** `RUNS_ON`を使うジョブは、どれもLinuxのセルフホストを想定しています。Windowsのジョブは`RUNS_ON_WINDOWS`を使います（既定は`windows-2025`）
 - **zizmorは`advanced-security: false`で動きます。** 指摘が1件でもあるとCIが落ちます。`run:`の中に`${{ secrets.* }}`を直接書くとtemplate injectionとして弾かれるため、必ず`env:`を経由します
 - **Dependabotの`nuget`は`groups`の`dependency-type`に対応しません。** 既存のnpmの書き方を写しても黙って効きません。`update-types`で分けます
 - **ラベルは`.github/labels.yml`に無いと黙って無視されます。** 新しいラベルを使う前に「ラベルを同期する」ワークフローを動かします
@@ -175,7 +176,6 @@ gh pr view 番号 --json headRefName,baseRefName -q '"\(.headRefName) -> \(.base
 
 ## まだ手を付けていないもの
 
-- `package.json`の`description`とルートの`README.md`がテンプレートの内容のままです
 - コード署名をしていません。SmartScreenの警告が出ます
 - 暑さの通知のトーストにボタンを置いていません。根拠は`docs/notifications.md`の「まだ足していないもの」にあります。トレイの案内のトーストだけは、設定を開くボタンを持ちます
 - 掲示モード（`docs/display.md`）は、実機での確認が残っています
