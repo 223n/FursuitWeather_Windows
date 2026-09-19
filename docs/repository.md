@@ -56,28 +56,44 @@ DependabotはSHAとコメントの両方を更新します。
 
 ## GitHub Actionsのランナー
 
-ワークフローは既定でGitHubがホストする`ubuntu-latest`で動きます。
+Linuxのジョブは、既定でGitHubがホストする`ubuntu-latest`で動きます。
 セルフホストのランナーがある場合は、リポジトリまたは組織の変数`RUNS_ON`に、ランナーのラベル（例: `self-hosted`）を設定します。
 設定は「Settings」→「Secrets and variables」→「Actions」の「Variables」にあるほか、`scripts/setup.ps1 -RunsOn ラベル`でも行えます。
 変数が無いときは`ubuntu-latest`に倒れるため、設定しなくても動きます。
 
-セルフホストのランナーには、`git`、`gh`（GitHub CLI）、Docker、`curl`、`jq`、`openssl`が要ります。
+Windowsのジョブは、`ci.yml`の「.NETのビルドとテスト（Windows）」と、`installer.yml`の2つです。
+既定のラベルは、どちらも`windows-2025`です。
+変数`RUNS_ON_WINDOWS`にラベルを入れると、そのランナーで動きます。
+`RUNS_ON`はLinuxのランナーを前提にしているため、Windowsのジョブには使いません。
+`RUNS_ON_WINDOWS`は`scripts/setup.ps1`では設定できないため、上の画面か`gh variable set`で設定します。
+`installer.yml`は、`windows-2025`のイメージに同梱されたInno Setup 6を使います（[構成](architecture.md)の「組み立て方」）。
+
+Linuxのセルフホストのランナーには、`git`、`gh`（GitHub CLI）、Docker、`curl`、`jq`、`openssl`が要ります。
 Dockerはzizmorの検査（コンテナで動きます）に使います。
 `curl`は、`ci.yml`の「ワークフローの構文検査」がactionlintを入れるのに使います。
 `jq`は、`release-publish.yml`の「更新のマニフェストを作る」で使います。
 `openssl`は、同じワークフローの「マニフェストへ署名する」で使います。
 この2つはリリースのときにしか使いません。
 無くてもCIは通り、タグとReleaseの下書きを作ったあとで初めて落ちます。
-Nodeはワークフローが用意します。
+`shellcheck`は任意です。
+入れておくと、actionlintが`run:`のシェルも検査します。
+無いときはその検査だけが飛ばされ、CIは通ります。
+Nodeと`.NET` SDKはワークフローが用意します。
+
+Windowsのセルフホストのランナーには、Git for Windows（`git`と`bash`）、`gh`、PowerShell 7（`pwsh`）、Inno Setup 6以上が要ります。
+`bash`は`installer.yml`のうち、`shell: bash`のステップが使います。
+`.NET` SDKはワークフローが用意します。
+
 公開リポジトリでセルフホストのランナーを使うと、フォークからのPull Requestで任意のコードが動くため、非公開のリポジトリで使ってください。
 
 ## ワークフローの一覧
 
 | ファイル | いつ動くか | 何をするか |
 | ---- | ---- | ---- |
-| `ci.yml` | `main`と`develop`への`push`、Pull Request、手動 | 日本語の文書、ワークフローの構文（actionlint）、ワークフローの安全性（zizmor）を検査します |
+| `ci.yml` | `main`と`develop`への`push`、Pull Request、手動 | 日本語の文書、ワークフローの構文（actionlint）、ワークフローの安全性（zizmor）を検査します。`.NET`のビルドとテストを、LinuxとWindowsで回します |
 | `codeql.yml` | `main`と`develop`への`push`、Pull Request、毎週月曜、手動 | ワークフローの安全性をCodeQLで走査します。結果は「Security」→「Code scanning」に出ます |
+| `installer.yml` | `release-publish.yml`からの呼び出し、組み立てに関わるファイルを変えたPull Request、手動 | インストーラーを組み立てます。呼び出されたときは、できたものをGitHub Releaseへ添えます |
 | `labels.yml` | `.github/labels.yml`か`.github/workflows/labels.yml`の変更、手動 | リポジトリのラベルを定義に揃えます。Pull Requestでは差分の表示だけです |
 | `labeler.yml` | Pull Requestを開いたとき、更新したとき | 変えたファイルとブランチ名からラベルを付けます |
 | `release.yml` | 手動 | `develop`からリリースブランチを切り、版を上げ、`main`へのPull Requestを開きます |
-| `release-publish.yml` | `release/*`か`hotfix/*`のPull Requestが`main`にマージされたとき | タグを打ち、GitHub Releaseを作り、`main`を`develop`に戻します |
+| `release-publish.yml` | `release/*`か`hotfix/*`のPull Requestが`main`にマージされたとき、`release.yml`が`auto_merge`でマージしたとき | タグを打ち、GitHub Releaseを下書きで作り、`main`を`develop`に戻します。インストーラーと、署名した更新のマニフェストを添えてから公開します |
