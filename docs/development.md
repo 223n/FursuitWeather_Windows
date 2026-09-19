@@ -100,7 +100,7 @@ Windows App SDKはAnyCPUに対応しません。
 ### 版の同期
 
 `release.yml`は`package.json`の`version`を単一の情報源にしています。
-216行目の`npm version`が書き換え、その差分をコミットします。
+`prepare`ジョブの`npm version`が書き換え、その差分をコミットします。
 
 `.csproj`との二重管理を避けます。
 MSBuildの静的プロパティ関数の許可リストに`System.IO.File::ReadAllText`と`Regex`が入っているため、`Directory.Build.props`から`package.json`を直接読めます。
@@ -117,19 +117,22 @@ MSBuildの静的プロパティ関数の許可リストに`System.IO.File::ReadA
 WPFのプロジェクトを足したときは、Windowsのランナーで動くジョブを別に設けます。
 
 **`vars.RUNS_ON`を使い回さないでください。**
-既存の3つのジョブ（32行目、60行目、83行目）はLinuxのセルフホストを想定しています。
+既存の3つのジョブ（`lint-ja`、`lint-workflows`、`zizmor`）はLinuxのセルフホストを想定しています。
 `RUNS_ON_WINDOWS`のような別の変数を新しく作ります。
 
 ```yaml
-runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-latest' }}
+runs-on: ${{ vars.RUNS_ON_WINDOWS || 'windows-2025' }}
 ```
+
+`ci.yml`の`build-windows`と`installer.yml`は、この形で書いてあります。
+`installer.yml`は、`windows-2025`のイメージに同梱されたInno Setup 6を使います（[構成](architecture.md)の「組み立て方」）。
 
 中身は`dotnet restore --locked-mode`、`dotnet format --verify-no-changes`、`dotnet build -warnaserror`、`dotnet test`の順にします。
 
-`codeql.yml`はmatrixを`language: [actions]`（46行目）から`include`の形に変え、`csharp`と`build-mode`を足します。
+`codeql.yml`はmatrixを`language: [actions]`から`include`の形に変え、`csharp`と`build-mode`を足します。
 タイムアウトも30分では足りなくなる見込みです。
 
-`zizmor`のジョブは`advanced-security: false`（101行目）のため、指摘が1件でもあると落ちます。
+`zizmor`のジョブは`advanced-security: false`のため、指摘が1件でもあると落ちます。
 実際に当たりやすいのは`unpinned-uses`と`cache-poisoning`です。
 新しく足すアクションは、既存の慣行どおりコミットSHAで固定し、版はコメントに書いてください。
 
@@ -211,7 +214,7 @@ $exe = Get-ChildItem -Recurse -Filter FursuitWeather.Widget.exe src\FursuitWeath
 ### 日本語Lintとの共存
 
 `package.json`の`lint`に`dotnet format`を混ぜないでください。
-`ci.yml`の日本語Lintのジョブ（29行目から56行目）はUbuntuで動き、.NET SDKがありません。
+`ci.yml`の日本語Lintのジョブ（`lint-ja`）はUbuntuで動き、.NET SDKがありません。
 混ぜるとこのジョブが落ちます。
 足すなら`lint`とは別の名前にします。
 

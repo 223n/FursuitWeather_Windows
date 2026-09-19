@@ -61,8 +61,13 @@ DependabotはSHAとコメントの両方を更新します。
 設定は「Settings」→「Secrets and variables」→「Actions」の「Variables」にあるほか、`scripts/setup.ps1 -RunsOn ラベル`でも行えます。
 変数が無いときは`ubuntu-latest`に倒れるため、設定しなくても動きます。
 
-セルフホストのランナーには、`git`と`gh`（GitHub CLI）、Dockerが要ります。
+セルフホストのランナーには、`git`、`gh`（GitHub CLI）、Docker、`curl`、`jq`、`openssl`が要ります。
 Dockerはzizmorの検査（コンテナで動きます）に使います。
+`curl`は、`ci.yml`の「ワークフローの構文検査」がactionlintを入れるのに使います。
+`jq`は、`release-publish.yml`の「更新のマニフェストを作る」で使います。
+`openssl`は、同じワークフローの「マニフェストへ署名する」で使います。
+この2つはリリースのときにしか使いません。
+無くてもCIは通り、タグとReleaseの下書きを作ったあとで初めて落ちます。
 Nodeはワークフローが用意します。
 公開リポジトリでセルフホストのランナーを使うと、フォークからのPull Requestで任意のコードが動くため、非公開のリポジトリで使ってください。
 
