@@ -477,7 +477,7 @@ COM例外だけを捕まえていたため、ここで落ちて自動起動の�
 本体を退避して実際に確かめました。
 
 ```text
-後始末: 本体が無いため起動を飛ばす: ...\FursuitWeather.Widget.exe
+後始末: 本体がないため起動を飛ばす: ...\FursuitWeather.Widget.exe
 後始末: Run キーの値を直接消した
 後始末: StartupApproved のフラグを直接消した
 ```
