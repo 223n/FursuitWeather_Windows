@@ -416,6 +416,8 @@ Windows App SDKのランタイムは消しません。
 #### 組み立て方
 
 定義は`installer/FursuitWeather.iss`、手順は`scripts/build-installer.ps1`にあります。
+ランタイムのインストーラーを取得する手順だけは、`scripts/get-runtime-installer.ps1`に分けてあります。
+CIの後始末の検査も同じものを使うためです。
 
 ```powershell
 ./scripts/build-installer.ps1              # 配布用
@@ -431,6 +433,12 @@ Inno Setupの場所は決め打ちにしません。
 
 リリースのときは`.github/workflows/installer.yml`が同じスクリプトを回し、できたものをGitHub Releaseへ添えます。
 組み立てに関わるファイルを触ったPRでも、ランタイムを同梱しない速い形で1回通します。
+
+どちらのときも、組み立てたあとで`--uninstall-cleanup`を実際に走らせ、終了コードが0になることを確かめます。
+そのために、検査の前にランタイムをランナーへ入れます。
+同梱しないPRでも、取得と導入は行います。
+`windows-2025`のランナーにはランタイムがなく、入れないとブートストラッパーが`Main`より前に`0x80670016`で終わるためです。
+以前はこの値を警告にとどめていたため、後始末は1行も走らないまま検査を通っていました。
 
 #### 実機で確かめたこと
 
