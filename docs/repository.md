@@ -97,7 +97,7 @@ FursuitWeatherを常用している利用者のアカウントで、ランナー
 | ---- | ---- | ---- |
 | `ci.yml` | `main`と`develop`への`push`、Pull Request、手動 | 日本語の文書、ワークフローの構文（actionlint）、ワークフローの安全性（zizmor）を検査します。`.NET`のビルドとテストを、LinuxとWindowsで回します |
 | `codeql.yml` | `main`と`develop`への`push`、Pull Request、毎週月曜、手動 | ワークフローの安全性をCodeQLで走査します。結果は「Security」→「Code scanning」に出ます |
-| `installer.yml` | `release-publish.yml`からの呼び出し、組み立てに関わるファイルを変えたPull Request、手動 | インストーラーを組み立てます。呼び出されたときは、できたものをGitHub Releaseへ添えます |
+| `installer.yml` | `release-publish.yml`からの呼び出し、組み立てに関わるファイルか本体（`src/FursuitWeather.Widget`）か`Directory.Packages.props`を変えたPull Request、手動 | インストーラーを組み立てます。呼び出されたときは、できたものをGitHub Releaseへ添えます |
 | `labels.yml` | `.github/labels.yml`か`.github/workflows/labels.yml`の変更、手動 | リポジトリのラベルを定義に揃えます。Pull Requestでは差分の表示だけです |
 | `labeler.yml` | Pull Requestを開いたとき、更新したとき | 変えたファイルとブランチ名からラベルを付けます |
 | `release.yml` | 手動 | `develop`からリリースブランチを切り、版を上げ、`main`へのPull Requestを開きます |

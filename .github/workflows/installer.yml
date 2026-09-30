@@ -8,7 +8,7 @@ name: インストーラーを作る
 #
 #   workflow_call     release-publish.yml から。tag を渡すと、その Release へ添付する
 #   workflow_dispatch 手で試すとき。Release へは添付せず、成果物として残す
-#   pull_request      組み立てに関わるファイルを触ったときの見張り
+#   pull_request      組み立てと後始末の検査に関わるファイルを触ったときの見張り
 #
 # pull_request のときはランタイムを同梱しない。
 # 111MB の圧縮に時間がかかるわりに、組み立てで確かめたいのは
@@ -48,11 +48,16 @@ on:
         type: boolean
         default: false
   pull_request:
+    # 本体と Windows App SDK の版も見張る。
+    # 後始末の検査は本体を起動して確かめるため、組み立てのファイルだけを見ていると、
+    # 本体の変更で後始末が壊れてもリリースのときまで気付けない
     paths:
       - 'installer/**'
       - 'scripts/build-installer.ps1'
       - 'scripts/get-runtime-installer.ps1'
       - '.github/workflows/installer.yml'
+      - 'src/FursuitWeather.Widget/**'
+      - 'Directory.Packages.props'
 
 permissions:
   contents: read
