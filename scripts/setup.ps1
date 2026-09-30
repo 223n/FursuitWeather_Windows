@@ -105,7 +105,7 @@ if ($LASTEXITCODE -ne 0) {
 if (-not $Repo) {
     $Repo = (gh repo view --json nameWithOwner --jq .nameWithOwner 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not $Repo) {
-        Write-Error '対象のリポジトリが分かりません。リポジトリの中で実行するか、-Repo OWNER/REPO を付けてください。'
+        Write-Error '対象のリポジトリがわかりません。リポジトリの中で実行するか、-Repo OWNER/REPO を付けてください。'
         exit 1
     }
 }
@@ -272,7 +272,7 @@ else {
     }
 
     if ($changed.Count -eq 0) {
-        Write-Ok '書き換えるものは無い'
+        Write-Ok '書き換えるものはない'
     }
     elseif ($NoPr) {
         Write-Ok "書き換えた（コミットはしていない）: $($changed -join ', ')"
