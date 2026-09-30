@@ -170,7 +170,7 @@ Windowsのビルドを必須のチェックにすると、ワークフローが�
 
 **インストーラーの生成は`ci.yml`に置いていません。**
 `installer.yml`に分け、`release-publish.yml`から呼びます。
-組み立てに関わるファイルを変えたPull Requestでも動きますが、必須のチェックにはしていません。
+組み立てに関わるファイル、本体（`src/FursuitWeather.Widget`）、`Directory.Packages.props`を変えたPull Requestでも動きますが、必須のチェックにはしていません。
 必須にすると、いま述べた`auto_merge`の問題に当たるためです。
 
 ### Dependabotとラベル
