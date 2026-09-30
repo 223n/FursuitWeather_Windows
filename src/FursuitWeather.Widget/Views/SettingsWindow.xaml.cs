@@ -179,7 +179,7 @@ public partial class SettingsWindow : Window
             var path = Environment.ProcessPath;
             if (path is null)
             {
-                ShowError("実行ファイルの場所が分からないため、自動起動を変えられませんでした。");
+                ShowError("実行ファイルの場所がわからないため、自動起動を変えられませんでした。");
                 StartupCheck.IsChecked = StartupRegistration.IsEffectivelyEnabled();
                 return;
             }
