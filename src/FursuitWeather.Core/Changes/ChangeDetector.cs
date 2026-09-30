@@ -19,7 +19,7 @@ namespace FursuitWeather.Core.Changes;
 /// <para>
 /// <b>公式発表（T3）は差分ではない。</b>
 /// 前回の値と比べて決めるものではなく、外部の事実そのものである。
-/// そのため基準の信頼性や応答の新しさに関わらず評価する。
+/// そのため基準の信頼性や応答の新しさにかかわらず評価する。
 /// </para>
 /// </remarks>
 public static class ChangeDetector
@@ -150,7 +150,7 @@ public static class ChangeDetector
     /// <para>
     /// 着用中止級（T1）と短縮（T2）は同じ悪化を指すため、出すのは片方だけにする。
     /// ただし <c>else if</c> でT2を消してはいけない。
-    /// T1が自分の予算（1日1回）で落ちたとき、T2へ落ちる道が無くなり、
+    /// T1が自分の予算（1日1回）で落ちたとき、T2へ落ちる道がなくなり、
     /// その日2回目の「活動できる状態から0分への転落」が完全に無音になるためである。
     /// </para>
     /// <para>
@@ -204,8 +204,8 @@ public static class ChangeDetector
     /// <item>着用中止を知らせたときより、補正後のWBGTが所定の幅だけ下がっていること</item>
     /// </list>
     /// <para>
-    /// 基準にする値が無いときは、直前の0分だった時点の補正後のWBGTで代える。
-    /// 「基準が無いから無条件で認める」としてはいけない。
+    /// 基準にする値がないときは、直前の0分だった時点の補正後のWBGTで代える。
+    /// 「基準がないから無条件で認める」としてはいけない。
     /// 状態を張り直したあとや初回の起動で、わずかな改善でも回復を知らせてしまう。
     /// </para>
     /// </remarks>
@@ -264,7 +264,7 @@ public static class ChangeDetector
             seen++;
         }
 
-        // 欠測で歯抜けになっている場合、続いている確証が無いので認めない
+        // 欠測で歯抜けになっている場合、続いている確証がないので認めない
         return seen >= need;
     }
 
@@ -297,7 +297,7 @@ public static class ChangeDetector
                 continue;
             }
 
-            // 同じ悪化について既に1件出していれば、代わりのほうは出さない
+            // 同じ悪化についてすでに1件出していれば、代わりのほうは出さない
             if (candidate.AlternativeGroup is { } group && satisfiedGroups.Contains(group))
             {
                 continue;
@@ -451,7 +451,7 @@ public static class ChangeDetector
         {
             SavedAt = now,
             AlertActive = alertActive,
-            // 発表が無いとき alertKey は空になる。
+            // 発表がないとき alertKey は空になる。
             // ここで前回の対象日を残すと、次の発表を「同じ発表」と読み違える
             AlertTargetDate = alertKey,
             AlertSpecial = alertSpecial,

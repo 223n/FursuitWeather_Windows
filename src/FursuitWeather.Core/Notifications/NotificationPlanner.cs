@@ -14,10 +14,10 @@ namespace FursuitWeather.Core.Notifications;
 /// </remarks>
 public sealed record NotificationState
 {
-    /// <summary>変化を見るときの基準。まだ無ければ null。</summary>
+    /// <summary>変化を見るときの基準。まだなければ null。</summary>
     public ChangeState? Change { get; init; }
 
-    /// <summary>朝のブリーフィングを最後に出した日（日本時間）。まだ無ければ null。</summary>
+    /// <summary>朝のブリーフィングを最後に出した日（日本時間）。まだなければ null。</summary>
     public DateOnly? LastBriefingDate { get; init; }
 }
 
@@ -25,7 +25,7 @@ public sealed record NotificationState
 /// 取得のたびに、出すべき通知と次に保存する状態を決める。
 /// </summary>
 /// <param name="State">次に保存する状態。</param>
-/// <param name="Messages">出すべき通知。無ければ空。</param>
+/// <param name="Messages">出すべき通知。なければ空。</param>
 public sealed record NotificationPlan(NotificationState State, IReadOnlyList<NotificationMessage> Messages);
 
 /// <summary>
@@ -49,7 +49,7 @@ public static class NotificationPlanner
     /// </summary>
     /// <param name="previous">前回までの状態。初回は既定値を渡す。</param>
     /// <param name="forecast">いまの予報。</param>
-    /// <param name="alert">公式の発表。無ければ null。</param>
+    /// <param name="alert">公式の発表。なければ null。</param>
     /// <param name="locationKey">地点の識別子。丸めたあとの座標を渡す。</param>
     /// <param name="placeName">地点の表示名。文面に使う。</param>
     /// <param name="now">いまの時刻。</param>

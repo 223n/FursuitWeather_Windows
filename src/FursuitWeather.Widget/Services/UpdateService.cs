@@ -91,22 +91,22 @@ public sealed class UpdateService : IDisposable
     /// <summary>取得を終えて、インストールできる更新があるか。</summary>
     public bool HasDownloadedUpdate => _download is not null;
 
-    /// <summary>取得を終えた更新の版。無ければ null。</summary>
+    /// <summary>取得を終えた更新の版。なければ null。</summary>
     /// <remarks>
     /// インストールで入るのはこの版である。
     /// <see cref="AvailableVersion"/> と取り違えないこと。新しい版が出た直後は食い違いうる。
     /// </remarks>
     public SemanticVersion? DownloadedVersion => _download?.Version;
 
-    /// <summary>見つかった更新の版。無ければ null。</summary>
+    /// <summary>見つかった更新の版。なければ null。</summary>
     public SemanticVersion? AvailableVersion => _available?.Version;
 
     /// <summary>
-    /// トレイのツールチップに足す1行。出すものが無ければ null。
+    /// トレイのツールチップに足す1行。出すものがなければ null。
     /// </summary>
     /// <remarks>
     /// 割り込まないと決めた知らせの受け皿である。
-    /// トーストを出さなくても、更新があることはここで分かる。
+    /// トーストを出さなくても、更新があることはここでわかる。
     /// </remarks>
     public string? TrayLine
     {
@@ -486,7 +486,7 @@ public sealed class UpdateService : IDisposable
             }
             catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
             {
-                // 安定版がまだ1つも出ていない。更新は無いものとして扱う。
+                // 安定版がまだ1つも出ていない。更新はないものとして扱う。
                 // 失敗として数えると、正式版を出すまで警告が出続ける
                 MarkAnswered();
                 Finish(wall, monotonic, accepted: null, UpdateStage.Idle, "公開されている安定版はまだありません");
@@ -513,7 +513,7 @@ public sealed class UpdateService : IDisposable
 
             if (result.Verdict == UpdateVerdict.SignatureInvalid)
             {
-                // 誰が作ったか分からない応答で、前に検証を通したものを捨てない。
+                // 誰が作ったかわからない応答で、前に検証を通したものを捨てない。
                 // 公衆Wi-Fiの認証ページや一時の不具合でも起きる。答えを得られなかったものとして扱う
                 MarkUnanswered(wall, monotonic);
                 Finish(wall, monotonic, accepted: null, before, Describe(result));
@@ -633,7 +633,7 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
-        // 置き場に、いまの狙いに使えるものは無い。見送る場合もここで片付ける。
+        // 置き場に、いまの狙いに使えるものはない。見送る場合もここで片付ける。
         // 見送りの前に消さないと、手放した旧版の実体が保留のあいだ残り続ける。
         // 途中で終わった取得の残りもここで消える
         _store.CleanExcept(null);
@@ -756,7 +756,7 @@ public sealed class UpdateService : IDisposable
                     return "押されるのを待っています";
                 }
 
-                // 理由を残す。黙って戻ると「なぜ入らないのか」が分からない
+                // 理由を残す。黙って戻ると「なぜ入らないのか」がわからない
                 HoldInstall(gate.Reason);
                 return LastMessage;
             }
@@ -877,7 +877,7 @@ public sealed class UpdateService : IDisposable
 
         if (message is null)
         {
-            // 知らせることが無くなった
+            // 知らせることがなくなった
             _noticePending = false;
             return;
         }

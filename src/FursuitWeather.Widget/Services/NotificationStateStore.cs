@@ -32,7 +32,7 @@ public static class NotificationStateStore
     };
 
     /// <summary>保存してある状態を読む。</summary>
-    /// <returns>読めた状態。無い、または壊れていれば空の状態。</returns>
+    /// <returns>読めた状態。ない、または壊れていれば空の状態。</returns>
     public static NotificationState Load()
     {
         try

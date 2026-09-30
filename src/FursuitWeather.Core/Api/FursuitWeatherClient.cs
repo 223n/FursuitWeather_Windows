@@ -13,7 +13,7 @@ public sealed class FursuitWeatherClient
     public static readonly Uri DefaultBaseAddress = new("https://fursuit-weather.223n.tech/");
 
     /// <summary>
-    /// 連絡先の分かるUser-Agent。
+    /// 連絡先のわかるUser-Agent。
     /// 本体が上流に対して名乗っている形に揃える。
     /// </summary>
     public const string UserAgent = "FursuitWeather_Windows/1.0 (+https://github.com/223n/FursuitWeather_Windows)";
@@ -103,7 +103,7 @@ public sealed class FursuitWeatherClient
     /// <summary>公式の熱中症警戒アラートの発表状況を取る。</summary>
     /// <param name="coordinate">座標。最寄りの都道府県の判定に使われる。</param>
     /// <param name="cancellationToken">取り消しの合図。</param>
-    /// <returns>発表の状況。発表が無ければ中身は null。</returns>
+    /// <returns>発表の状況。発表がなければ中身は null。</returns>
     /// <remarks>
     /// 上流の異常でも予報の表示を巻き込まないよう、APIは常に200で null を返す。
     /// 取れなければ「発表なし」として扱ってよい。

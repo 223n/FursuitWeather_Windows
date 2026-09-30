@@ -9,7 +9,7 @@ namespace FursuitWeather.Widget.Interop;
 /// </summary>
 /// <remarks>
 /// 根拠は <c>docs/open-questions.md</c> の「小窓の高さ」にある。
-/// 最背面への固定は実測の結果、目的と正反対の挙動になると分かったため採らない。
+/// 最背面への固定は実測の結果、目的と正反対の挙動になるとわかったため採らない。
 /// </remarks>
 internal static partial class WindowChrome
 {
@@ -36,7 +36,7 @@ internal static partial class WindowChrome
     /// <param name="window">対象のウィンドウ。</param>
     /// <remarks>
     /// <see cref="Window.SourceInitialized"/> より後に呼ぶこと。
-    /// それより前ではハンドルがまだ無い。
+    /// それより前ではハンドルがまだない。
     /// </remarks>
     public static void ApplyOverlayStyles(Window window)
     {

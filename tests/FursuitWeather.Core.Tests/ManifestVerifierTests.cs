@@ -320,7 +320,7 @@ public sealed class ManifestVerifierTests : IDisposable
     [Fact]
     public void 使用を止める指定を更新が無いときでも伝える()
     {
-        // 「更新は無いが、いまの版はもう使えない」が成り立つ
+        // 「更新はないが、いまの版はもう使えない」が成り立つ
         var result = Run(Manifest(version: "0.3.0", unsupportedBelow: "0.4.0"));
 
         Assert.Equal(UpdateVerdict.NotNewer, result.Verdict);

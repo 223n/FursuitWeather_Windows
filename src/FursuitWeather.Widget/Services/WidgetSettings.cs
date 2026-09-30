@@ -116,7 +116,7 @@ public sealed record WidgetSettings
     /// <summary>
     /// 設定を読む。
     /// </summary>
-    /// <returns>読めた設定。無い、または壊れていれば既定値。</returns>
+    /// <returns>読めた設定。ない、または壊れていれば既定値。</returns>
     /// <remarks>
     /// 読めないことを失敗として扱わない。
     /// 設定が壊れていても、既定値で動き続けるほうが安全である。

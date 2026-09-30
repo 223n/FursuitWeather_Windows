@@ -9,7 +9,7 @@ namespace FursuitWeather.Core.Time;
 /// <para>
 /// <c>hours[].time</c> は <c>2026-08-15T09:00</c> のような、オフセットを持たない文字列である。
 /// これを <see cref="DateTimeOffset"/> で受けてはならない。
-/// <see cref="DateTimeOffset"/> はオフセットが無いときに実行するマシンのローカルの値を補うため、
+/// <see cref="DateTimeOffset"/> はオフセットがないときに実行するマシンのローカルの値を補うため、
 /// 日本時間の開発機では正しく動き、UTCのCIでだけ9時間ずれる。
 /// テストが通ってしまう種類の不具合になる。
 /// </para>

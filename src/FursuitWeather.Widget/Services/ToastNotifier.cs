@@ -38,7 +38,7 @@ public sealed class ToastNotifier : IDisposable
 
     /// <summary>通知が使える状態か。</summary>
     /// <remarks>
-    /// ランタイムが無い、利用者が通知を切っている、といった場合に偽になる。
+    /// ランタイムがない、利用者が通知を切っている、といった場合に偽になる。
     /// 偽のときは小窓とトレイへ倒す。通知だけが静かに壊れる状態を作らないためである。
     /// </remarks>
     public bool IsAvailable =>
@@ -49,7 +49,7 @@ public sealed class ToastNotifier : IDisposable
     /// </summary>
     /// <remarks>
     /// 登録はできているのに出せない状態を指す。
-    /// ランタイムが無くて登録できない状態とは区別する。
+    /// ランタイムがなくて登録できない状態とは区別する。
     /// 前者は利用者が選んだ結果であり、後者は環境の不備だからである。
     /// </remarks>
     public bool IsBlockedByUser =>
@@ -111,7 +111,7 @@ public sealed class ToastNotifier : IDisposable
         }
         catch (Exception e) when (e is COMException or InvalidOperationException or TypeInitializationException or DllNotFoundException)
         {
-            // ランタイムが無いなど。通知は諦め、小窓とトレイで伝える
+            // ランタイムがないなど。通知は諦め、小窓とトレイで伝える
             _registered = false;
         }
 
@@ -273,7 +273,7 @@ public sealed class ToastNotifier : IDisposable
     /// アンインストールを止めないため、握りつぶす。
     /// </para>
     /// <para>
-    /// <b>登録が無いときは <see cref="FileNotFoundException"/> が飛ぶ。</b>
+    /// <b>登録がないときは <see cref="FileNotFoundException"/> が飛ぶ。</b>
     /// WinRT のHRESULTがそう写るためで、実機で確認している。
     /// これを捕まえ損ねると、アンインストールの後始末が1行も走らずにプロセスが落ち、
     /// 自動起動の登録が端末に残る。

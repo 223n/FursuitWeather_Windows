@@ -28,7 +28,7 @@ jobs:
   lint-ja:
     name: 日本語Lint
     # セルフホストのランナーがあれば、リポジトリの変数 RUNS_ON にそのラベル（例: self-hosted）を設定する。
-    # 無ければ GitHub がホストする ubuntu-latest で動く
+    # なければ GitHub がホストする ubuntu-latest で動く
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     # 固まったまま枠を占め続けないようにする
     timeout-minutes: 10
@@ -129,7 +129,7 @@ jobs:
       - name: actionlintを入れる
         id: actionlint
         # 公式の導入スクリプトを使う。スクリプトはタグ v1.7.12 のコミットで固定し、版も渡す。
-        # shellcheck が入っていればシェルの検査も行い、無ければその規則だけ飛ばす
+        # shellcheck が入っていればシェルの検査も行い、なければその規則だけ飛ばす
         run: |
           bash <(curl -sSfL 'https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash') 1.7.12
 
@@ -153,7 +153,7 @@ jobs:
           persist-credentials: false
 
       - name: zizmorで検査する
-        # zizmor-action はコンテナで動くため、セルフホストのランナーには Docker が要る。
+        # zizmor-action はコンテナーで動くため、セルフホストのランナーには Docker が要る。
         # advanced-security を切ると Code scanning へは送らず、指摘があればこのジョブが失敗する。
         # zizmor の版は固定する。版が上がると監査が増えて、変更していないのに落ちることがあるため
         uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4

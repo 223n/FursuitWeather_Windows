@@ -1,7 +1,7 @@
 # バグ報告のフォーム。
 # 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
 #
-# labels に書くラベルはリポジトリに無ければ付かない。.github/labels.yml で定義してある。
+# labels に書くラベルはリポジトリになければ付かない。.github/labels.yml で定義してある。
 # 各要素の id は ASCII で付ける。日本語の label だけだと参照名が同じになり、フォームが壊れることがある。
 # validations.required は公開リポジトリでだけ効く。
 name: バグ報告

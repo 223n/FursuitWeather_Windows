@@ -33,7 +33,7 @@ jobs:
   analyze:
     name: CodeQL（${{ matrix.language }}）
     # セルフホストのランナーがあれば、リポジトリの変数 RUNS_ON にそのラベル（例: self-hosted）を設定する。
-    # 無ければ GitHub がホストする ubuntu-latest で動く
+    # なければ GitHub がホストする ubuntu-latest で動く
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 30
     permissions:

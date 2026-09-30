@@ -4,7 +4,7 @@ node_modules/
 # 検査やビルドの出力
 *.log
 
-# エディタと OS
+# エディターと OS
 .DS_Store
 .vscode/settings.json
 .idea/

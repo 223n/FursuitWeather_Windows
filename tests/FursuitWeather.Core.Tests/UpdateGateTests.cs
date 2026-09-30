@@ -338,7 +338,7 @@ public sealed class UpdateGateTests
     [Fact]
     public void 前回が途中で終わっていれば自動では再実行しない()
     {
-        // 無人で壊れた状態へ上書きを繰り返すのが最も危ない
+        // 無人で壊れた状態へ上書きを繰り返すのがもっとも危ない
         var decision = UpdateGate.ForInstall(State(interrupted: true), Conditions(), Now);
 
         Assert.Equal(UpdateHoldReason.InterruptedInstall, decision.Reason);
@@ -400,7 +400,7 @@ public sealed class UpdateGateTests
     [Fact]
     public void 見送る理由には必ず文がある()
     {
-        // 「なぜ更新されないのか分からない」を作らない
+        // 「なぜ更新されないのかわからない」を作らない
         foreach (var reason in Enum.GetValues<UpdateHoldReason>())
         {
             var text = UpdateGate.Describe(reason);

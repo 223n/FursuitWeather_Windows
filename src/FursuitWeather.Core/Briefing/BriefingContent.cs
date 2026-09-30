@@ -43,7 +43,7 @@ public sealed record BriefingContent
     public bool IsCold { get; init; }
 
     /// <summary>
-    /// 適した時間帯が1つも無いか。
+    /// 適した時間帯が1つもないか。
     /// </summary>
     /// <remarks>
     /// 「今日は着られない」ことを、はっきり伝えるために使う。

@@ -28,7 +28,7 @@
             トレイのアイコン。
             クリックスルーを有効にした窓はマウス入力を受け付けないため、
             ここが常に手の届く解除の経路になる。
-            小窓はタスクバーにもAlt+Tabにも出ないので、これが無いと詰む。
+            小窓はタスクバーにもAlt+Tabにも出ないので、これがないと詰む。
         -->
         <tb:TaskbarIcon x:Name="TrayIcon"
                         IconSource="/Resources/tray.ico"
