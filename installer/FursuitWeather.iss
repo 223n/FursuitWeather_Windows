@@ -227,7 +227,7 @@ begin
   Exe := AppDir + '\{#AppExeName}';
   if not FileExists(Exe) then
   begin
-    Log('更新: 起動し直す本体が無い: ' + Exe);
+    Log('更新: 起動し直す本体がない: ' + Exe);
     Exit;
   end;
 
@@ -294,7 +294,7 @@ begin
   Installer := ExpandConstant('{tmp}\') + ExtractFileName('{#RuntimeInstaller}');
   if not FileExists(Installer) then
   begin
-    Log('ランタイム: 同梱したはずのファイルが無い: ' + Installer);
+    Log('ランタイム: 同梱したはずのファイルがない: ' + Installer);
     Result := False;
     Exit;
   end;
@@ -378,7 +378,7 @@ begin
     これは best-effort である。起動できなくても後始末は続ける }
   Exe := ExpandConstant('{app}\{#AppExeName}');
   if not FileExists(Exe) then
-    Log('後始末: 本体が無いため起動を飛ばす: ' + Exe)
+    Log('後始末: 本体がないため起動を飛ばす: ' + Exe)
   else if not Exec(Exe, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Log('後始末: 本体を起動できなかった')
   else if ResultCode = 0 then
