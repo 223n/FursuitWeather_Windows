@@ -11,7 +11,7 @@
 IssueとPull Requestのラベルはすべて日本語です。
 `.github/labels.yml`が定義で、「ラベルを同期する」ワークフローがリポジトリのラベルをこの内容に揃えます。
 ラベルを足したり変えたりするときは、GitHubの画面ではなくこのファイルを変えてください。
-ファイルに無いラベルは消えます。
+ファイルにないラベルは消えます。
 
 | ラベル | 用途 | 誰が付けるか |
 | ---- | ---- | ---- |
@@ -59,7 +59,7 @@ DependabotはSHAとコメントの両方を更新します。
 Linuxのジョブは、既定でGitHubがホストする`ubuntu-latest`で動きます。
 セルフホストのランナーがある場合は、リポジトリまたは組織の変数`RUNS_ON`に、ランナーのラベル（例: `self-hosted`）を設定します。
 設定は「Settings」→「Secrets and variables」→「Actions」の「Variables」にあるほか、`scripts/setup.ps1 -RunsOn ラベル`でも行えます。
-変数が無いときは`ubuntu-latest`に倒れるため、設定しなくても動きます。
+変数がないときは`ubuntu-latest`に倒れるため、設定しなくても動きます。
 
 Windowsのジョブは、`ci.yml`の「.NETのビルドとテスト（Windows）」と、`installer.yml`の2つです。
 既定のラベルは、どちらも`windows-2025`です。
@@ -69,15 +69,15 @@ Windowsのジョブは、`ci.yml`の「.NETのビルドとテスト（Windows）
 `installer.yml`は、`windows-2025`のイメージに同梱されたInno Setup 6を使います（[構成](architecture.md)の「組み立て方」）。
 
 Linuxのセルフホストのランナーには、`git`、`gh`（GitHub CLI）、Docker、`curl`、`jq`、`openssl`が要ります。
-Dockerはzizmorの検査（コンテナで動きます）に使います。
+Dockerはzizmorの検査（コンテナーで動きます）に使います。
 `curl`は、`ci.yml`の「ワークフローの構文検査」がactionlintを入れるのに使います。
 `jq`は、`release-publish.yml`の「更新のマニフェストを作る」で使います。
 `openssl`は、同じワークフローの「マニフェストへ署名する」で使います。
 この2つはリリースのときにしか使いません。
-無くてもCIは通り、タグとReleaseの下書きを作ったあとで初めて落ちます。
+無くてもCIは通り、タグとReleaseの下書きを作ったあとではじめて落ちます。
 `shellcheck`は任意です。
 入れておくと、actionlintが`run:`のシェルも検査します。
-無いときはその検査だけが飛ばされ、CIは通ります。
+ないときはその検査だけが飛ばされ、CIは通ります。
 Nodeと`.NET` SDKはワークフローが用意します。
 
 Windowsのセルフホストのランナーには、Git for Windows（`git`と`bash`）、`gh`、PowerShell 7（`pwsh`）、Inno Setup 6以上が要ります。

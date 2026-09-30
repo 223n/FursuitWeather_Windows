@@ -78,7 +78,7 @@ Cloudflareのinvocation logはクエリ文字列を丸めずに記録するた�
 `hours[].time`は`2026-08-15T09:00`のような、タイムゾーンを持たない日本時間の文字列です。
 
 **`DateTimeOffset`で受けないでください。**
-`DateTimeOffset`はオフセットが無いときに実行するマシンのローカルのオフセットを補います。
+`DateTimeOffset`はオフセットがないときに実行するマシンのローカルのオフセットを補います。
 開発機は日本時間のため正しく動き、UTCのCIランナーでだけ9時間ずれます。
 テストが通ってしまう種類の不具合です。
 
@@ -92,7 +92,7 @@ Cloudflareのinvocation logはクエリ文字列を丸めずに記録するた�
 
 ## User-Agent
 
-連絡先の分かるUser-Agentを名乗ります。
+連絡先のわかるUser-Agentを名乗ります。
 本体が上流に対して`FursuitWeather (https://github.com/223n/FursuitWeather)`と名乗っており、それに揃えます。
 
 ```text
@@ -123,9 +123,14 @@ FursuitWeather_Windows/1.0 (+https://github.com/223n/FursuitWeather_Windows)
 
 ## 既存資産のうち使えるもの
 
+<!-- 訂正の「」は以前の文面の引用のため、表記の辞書で書き換えない -->
+<!-- textlint-disable prh -->
+
 **訂正**: この節はかつて「判定の悪化を検知して通知する仕組みは、本体のWeb版にありません。前回の`grade`と比べる機構が無いためです」と書いていました。
 誤りでした。
 `public/app.js`の`renderForecastDiff`（1510行）が、まさに前回の`grade`と比べています。
+
+<!-- textlint-enable prh -->
 
 そのまま写せるものが4つあります。
 
