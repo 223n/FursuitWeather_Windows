@@ -57,7 +57,7 @@ public sealed class UpdateRetryPolicyTests
     }
 
     [Fact]
-    public void 失敗の時刻が無い記録では上限を効かせない()
+    public void 失敗の時刻がない記録では上限を効かせない()
     {
         // 窓を決められないものを止める側へ倒すと、二度と解けない
         Assert.False(UpdateRetryPolicy.IsDownloadExhausted(new UpdateAttempts { DownloadFailures = 99 }, Now));

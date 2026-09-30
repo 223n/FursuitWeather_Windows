@@ -31,7 +31,7 @@ public sealed class DisplayScreenTests
     }
 
     [Fact]
-    public void 選んだモニターが無ければ主モニターへ落とす()
+    public void 選んだモニターがなければ主モニターへ落とす()
     {
         var decision = MonitorChoice.Resolve("\\\\?\\DISPLAY#Z", [Second, Primary]);
 
@@ -49,13 +49,13 @@ public sealed class DisplayScreenTests
     }
 
     [Fact]
-    public void 主モニターが分からなければ先頭へ出す()
+    public void 主モニターがわからなければ先頭へ出す()
     {
         Assert.Equal(Second, MonitorChoice.Resolve(null, [Second]).Monitor);
     }
 
     [Fact]
-    public void モニターが1台も無ければ出さない()
+    public void モニターが1台もなければ出さない()
     {
         var decision = MonitorChoice.Resolve("x", []);
 

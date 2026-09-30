@@ -132,7 +132,7 @@ jobs:
             exit 1
           }
           if ($code -ne 0) {
-            Write-Output "::warning::--uninstall-cleanup の終了コードが $code。ランナーにランタイムが無い可能性がある"
+            Write-Output "::warning::--uninstall-cleanup の終了コードが $code。ランナーにランタイムがない可能性がある"
           }
 
       - name: 成果物として残す

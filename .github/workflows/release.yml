@@ -67,7 +67,7 @@ jobs:
         # GitHub がホストするランナーには入っている。セルフホストのランナーでは自分で入れる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 
@@ -95,7 +95,7 @@ jobs:
         # ないまま checkout に進むと、原因のわかりにくい失敗になる
         run: |
           if ! gh api "repos/${GITHUB_REPOSITORY}/branches/${DEVELOP_BRANCH}" --silent 2>/dev/null; then
-            echo "::error::${DEVELOP_BRANCH} ブランチが無い。main から作ってから実行する"
+            echo "::error::${DEVELOP_BRANCH} ブランチがない。main から作ってから実行する"
             exit 1
           fi
 
@@ -142,7 +142,7 @@ jobs:
           current="$(node -p "require('./package.json').version")"
           main_version="$(git show "origin/${MAIN_BRANCH}:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)"
           latest_tag="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
-          echo "develop: ${current} / main: ${main_version:-無し} / 最新のタグ: ${latest_tag:-無し}"
+          echo "develop: ${current} / main: ${main_version:-なし} / 最新のタグ: ${latest_tag:-なし}"
 
           node -e '
             const [next, ...bases] = process.argv.slice(1)
@@ -308,7 +308,7 @@ jobs:
       - name: GitHub CLIがあることを確かめる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 

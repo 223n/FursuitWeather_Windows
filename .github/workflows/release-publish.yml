@@ -61,7 +61,7 @@ jobs:
         # GitHub がホストするランナーには入っている。セルフホストのランナーでは自分で入れる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 
@@ -219,7 +219,7 @@ jobs:
             git push origin --delete "${BRANCH}"
             echo "ブランチ ${BRANCH} を消した"
           else
-            echo "ブランチ ${BRANCH} はすでに無い"
+            echo "ブランチ ${BRANCH} はすでにない"
           fi
 
   installer:

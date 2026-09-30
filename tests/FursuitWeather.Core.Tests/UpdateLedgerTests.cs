@@ -238,7 +238,7 @@ public sealed class UpdateLedgerTests
     // ---- 確認
 
     [Fact]
-    public void 確認の時刻は成否に関わらず進める()
+    public void 確認の時刻は成否にかかわらず進める()
     {
         // 進めないと、失敗が続くあいだ30秒ごとに取りに行き続ける
         var state = UpdateLedger.RecordCheck(new UpdateState(), Now, TimeSpan.FromHours(3), acceptedManifestAt: null);
@@ -365,7 +365,7 @@ public sealed class UpdateLedgerTests
     }
 
     [Fact]
-    public void 失敗の記録が無ければ何もしない()
+    public void 失敗の記録がなければ何もしない()
     {
         var state = new UpdateState { AutoUpdateDisabled = false };
 
