@@ -8,11 +8,12 @@ name: インストーラーを作る
 #
 #   workflow_call     release-publish.yml から。tag を渡すと、その Release へ添付する
 #   workflow_dispatch 手で試すとき。Release へは添付せず、成果物として残す
-#   pull_request      組み立てに関わるファイルを触ったときの見張り
+#   pull_request      組み立てと後始末の検査に関わるファイルを触ったときの見張り
 #
 # pull_request のときはランタイムを同梱しない。
-# 111MB の取得と圧縮に時間がかかるわりに、確かめたいのは
+# 111MB の圧縮に時間がかかるわりに、組み立てで確かめたいのは
 # 「発行が通るか」と「.iss が壊れていないか」だけだからである。
+# ただし取得はする。後始末の検査の前に、ランナーへ入れるためである。
 #
 # Inno Setup は windows-2025 のランナーに 6 系が同梱されている。
 # 探す場所はスクリプトの側が持つ。セルフホストのランナーを使う場合は自分で入れる。
@@ -47,10 +48,16 @@ on:
         type: boolean
         default: false
   pull_request:
+    # 本体と Windows App SDK の版も見張る。
+    # 後始末の検査は本体を起動して確かめるため、組み立てのファイルだけを見ていると、
+    # 本体の変更で後始末が壊れてもリリースのときまで気付けない
     paths:
       - 'installer/**'
       - 'scripts/build-installer.ps1'
+      - 'scripts/get-runtime-installer.ps1'
       - '.github/workflows/installer.yml'
+      - 'src/FursuitWeather.Widget/**'
+      - 'Directory.Packages.props'
 
 permissions:
   contents: read
@@ -101,14 +108,59 @@ jobs:
           }
           ./scripts/build-installer.ps1 @params
 
+      - name: ランタイムをランナーへ入れる
+        # 次の検査を本体まで届かせるため。
+        # windows-2025 のランナーには Windows App SDK のランタイムがない。入れずに起動すると、
+        # ブートストラッパーが Main より前に 0x80670016 で終わる。
+        # 後始末は1行も走らないまま、次の検査が通っていた。
+        #
+        # 同梱する組み立てでは、取得済みのものをそのまま使う。
+        # 同梱しない組み立て（pull_request）では、ここで取得する
+        shell: pwsh
+        run: |
+          $installer = ./scripts/get-runtime-installer.ps1
+          Write-Output "実行する: $installer --quiet"
+          $p = Start-Process -FilePath $installer -ArgumentList '--quiet' -NoNewWindow -PassThru
+          if (-not $p.WaitForExit(600000)) {
+            $p.Kill()
+            Write-Output "::error::ランタイムのインストーラーが10分で終わらなかった"
+            exit 1
+          }
+
+          $p.WaitForExit()
+          $code = $p.ExitCode
+          $hex = '0x{0:X8}' -f $code
+          Write-Output "終了コード: $code（$hex）"
+
+          # 入ったパッケージを記録する。次の検査が落ちたときに、
+          # ランタイムが入っていなかったのかを見分ける手がかりにする。
+          # PowerShell 7 の Appx は環境によって動かないため、Windows PowerShell に任せる
+          Write-Output '入っている Windows App Runtime のパッケージ:'
+          powershell.exe -NoProfile -Command "Get-AppxPackage -Name 'Microsoft.WindowsAppRuntime*' | Format-Table Name, Version, Architecture -AutoSize | Out-String -Width 200"
+
+          # 0x80073D06（ERROR_INSTALL_PACKAGE_DOWNGRADE）は、新しい版がすでに入っているときに返りうる。
+          # 入っている版で動く見込みがあるため、ここでは止めず、次の検査に判断を任せる。
+          # PowerShell は16進のリテラルを Int32 として読むため、ExitCode とそのまま比べられる
+          if ($code -eq 0x80073D06) {
+            Write-Output "::notice::ランタイムのインストーラーが $hex を返した。新しい版が入っている可能性があるため、次の検査に判断を任せる"
+          }
+          elseif ($code -ne 0) {
+            Write-Output "::error::ランタイムを入れられなかった（終了コード $code、$hex）。後始末の検査が本体まで届かない"
+            exit 1
+          }
+
+          # 上の記録の終了コードで、このステップの成否を決めさせない
+          exit 0
+
       - name: アンインストールの後始末が落ちないことを確かめる
         # 一度ここで落ちた。Application.StartupUri に null を代入して
         # ArgumentNullException になり、後始末が1行も走らないまま
         # 自動起動の登録が端末に残った。
         #
-        # ランナーには Windows App SDK のランタイムがないことがあり、
-        # そのときは 0 にならない。0xE0434352（.NET の未処理例外）だけを失敗とする。
-        # 落ちた原因が「例外を捕まえ損ねた」ことなら、必ずこの値になる
+        # 前のステップでランタイムを入れてあるため、0 以外はすべて失敗とする。
+        # 以前はランタイムのないランナーに合わせて、0xE0434352（.NET の未処理例外）
+        # だけを失敗としていた。そのあいだ後始末は1行も走っておらず、
+        # この検査は何も確かめないまま通っていた
         shell: pwsh
         run: |
           $exe = 'artifacts/publish/win-x64/FursuitWeather.Widget.exe'
@@ -126,14 +178,18 @@ jobs:
 
           $p.WaitForExit()
           $code = $p.ExitCode
-          Write-Output "終了コード: $code"
-          if ($code -eq -532462766) {
+          # HRESULT は16進で引くことが多いため、両方を出す
+          $hex = '0x{0:X8}' -f $code
+          Write-Output "終了コード: $code（$hex）"
+          if ($code -eq 0xE0434352) {
             Write-Output "::error::--uninstall-cleanup が未処理の例外で落ちた（0xE0434352）。後始末が走っていない"
             exit 1
           }
           if ($code -ne 0) {
-            Write-Output "::warning::--uninstall-cleanup の終了コードが $code。ランナーにランタイムがない可能性がある"
+            Write-Output "::error::--uninstall-cleanup の終了コードが $code（$hex）。0x8067 で始まるなら、ブートストラッパーがランタイムを解決できずに終わっている"
+            exit 1
           }
+          Write-Output '後始末が最後まで走った'
 
       - name: 成果物として残す
         # 配れないもの（-noruntime）は残さない。置き場所を占めるだけで使い道がない
