@@ -188,7 +188,7 @@ Windowsのビルドを必須のチェックにすると、ワークフローが�
 `cooldown`は`nuget`でも使えます。
 
 `.github/labels.yml`に`NuGet`のラベルを足し、**先に「ラベルを同期する」ワークフローを動かします。**
-リポジトリに無いラベルはDependabotが黙って無視します。
+リポジトリにないラベルはDependabotが黙って無視します。
 
 `.github/labeler.yml`の「依存関係」の対象へ、`**/*.csproj`、`Directory.Packages.props`、`global.json`を足します。
 

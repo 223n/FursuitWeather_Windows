@@ -87,7 +87,7 @@ ClearTypeも無効になり、MicaとAcrylicも使えません。
 ### 時刻はDateTimeOffsetで受けない
 
 APIの`hours[].time`は`2026-08-15T09:00`のような、タイムゾーンを持たない日本時間の文字列です。
-`DateTimeOffset`はオフセットが無いときに実行するマシンのローカルの値を補うため、日本時間の開発機では正しく動き、UTCのCIでだけ9時間ずれます。
+`DateTimeOffset`はオフセットがないときに実行するマシンのローカルの値を補うため、日本時間の開発機では正しく動き、UTCのCIでだけ9時間ずれます。
 `DateTime`で受け、使う直前に`TimeZoneInfo`で解釈します。
 
 ### hours配列を添字で扱わない
@@ -108,7 +108,7 @@ Cloudflareのinvocation logがクエリ文字列を丸めずに記録するた�
 - **`vars.RUNS_ON`をWindowsのジョブに使い回さないでください。** `RUNS_ON`を使うジョブは、どれもLinuxのセルフホストを想定しています。Windowsのジョブは`RUNS_ON_WINDOWS`を使います（既定は`windows-2025`）
 - **zizmorは`advanced-security: false`で動きます。** 指摘が1件でもあるとCIが落ちます。`run:`の中に`${{ secrets.* }}`を直接書くとtemplate injectionとして弾かれるため、必ず`env:`を経由します
 - **Dependabotの`nuget`は`groups`の`dependency-type`に対応しません。** 既存のnpmの書き方を写しても黙って効きません。`update-types`で分けます
-- **ラベルは`.github/labels.yml`に無いと黙って無視されます。** 新しいラベルを使う前に「ラベルを同期する」ワークフローを動かします
+- **ラベルは`.github/labels.yml`にないと黙って無視されます。** 新しいラベルを使う前に「ラベルを同期する」ワークフローを動かします
 - **`.editorconfig`にMicrosoft既定の内容を貼らないでください。** `end_of_line = crlf`が既存の方針と衝突します。C#向けには`indent_size`と`tab_width`だけを足します
 
 ## ブランチとコミット
