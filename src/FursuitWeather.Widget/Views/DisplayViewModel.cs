@@ -19,7 +19,7 @@ namespace FursuitWeather.Widget.Views;
 /// <param name="Accent">枠の色。</param>
 internal sealed record DisplayBadge(string Symbol, string Label, Brush Surface, Brush Text, Brush Accent)
 {
-    /// <summary>まだ判定が無いときのバッジ。</summary>
+    /// <summary>まだ判定がないときのバッジ。</summary>
     public static DisplayBadge Pending { get; } =
         new("…", "取得中", Brushes.WhiteSmoke, Brushes.Black, Brushes.Gray);
 
@@ -67,7 +67,7 @@ internal sealed record DisplayHourCell(string Time, string Weather, string Tempe
 /// <param name="Date">日付。「今日 8/19（水）」の形。</param>
 /// <param name="Weather">天気の日本語。</param>
 /// <param name="Temperature">最高と最低。</param>
-/// <param name="Laundry">洗濯の文字。無ければ空。</param>
+/// <param name="Laundry">洗濯の文字。なければ空。</param>
 /// <param name="Badge">日中でもっとも厳しい屋外の判定。</param>
 internal sealed record DisplayDayCell(
     string Date,
@@ -95,7 +95,7 @@ internal sealed record DisplayInputs
     /// <summary>予報。まだ取れていなければ null。</summary>
     public ForecastResponse? Forecast { get; init; }
 
-    /// <summary>公式の発表。無ければ null。</summary>
+    /// <summary>公式の発表。なければ null。</summary>
     public HeatAlert? Alert { get; init; }
 
     /// <summary>全国の天気。出せる状態でなければ null。</summary>
@@ -201,7 +201,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>この後の予報が1こまも無いか。</summary>
+    /// <summary>この後の予報が1こまもないか。</summary>
     public bool MissingHours => !HasHours;
 
     /// <summary>3日間の天気を1こまでも出せるか。</summary>
@@ -217,7 +217,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>3日間の天気が1こまも無いか。</summary>
+    /// <summary>3日間の天気が1こまもないか。</summary>
     public bool MissingDays => !HasDays;
 
     /// <summary>全国の天気を1こまでも出せるか。</summary>
@@ -233,7 +233,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>全国の天気が1こまも無いか。</summary>
+    /// <summary>全国の天気が1こまもないか。</summary>
     public bool MissingCities => !HasCities;
 
     /// <summary>いまの判定を出せないときの一言。</summary>
@@ -304,7 +304,7 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
 
     /// <summary>全国の天気を出せないときの文。</summary>
     /// <remarks>
-    /// 手元に1件も無いときにだけ出す。
+    /// 手元に1件もないときにだけ出す。
     /// 取り直しに失敗しても前回の都市を出し続けるため、文面は取得できていないことだけを言う。
     /// </remarks>
     public string EmptyNational { get; } = "全国の天気を取得できていません";
@@ -386,9 +386,9 @@ internal sealed class DisplayViewModel : INotifyPropertyChanged
     }
 
     /// <summary>いまの時間の行を選ぶ。もしものときの条件にも同じものを渡す。</summary>
-    /// <param name="forecast">予報。まだ無ければ null。</param>
+    /// <param name="forecast">予報。まだなければ null。</param>
     /// <param name="now">いまの時刻。</param>
-    /// <returns>いまの時間の行。無ければ null。</returns>
+    /// <returns>いまの時間の行。なければ null。</returns>
     public static HourForecast? CurrentHour(ForecastResponse? forecast, DateTimeOffset now) =>
         forecast is null ? null : ForecastView.SelectCurrentHour(forecast, now);
 

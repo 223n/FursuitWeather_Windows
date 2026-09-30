@@ -33,7 +33,7 @@ internal sealed record MonitorTarget(
 /// <remarks>
 /// <para>
 /// <b>WPFの <see cref="Window.Left"/> と <see cref="Window.Top"/> は使わない。</b>
-/// Per-Monitor V2では壊れていることが分かっている（<c>docs/architecture.md</c>）。
+/// Per-Monitor V2では壊れていることがわかっている（<c>docs/architecture.md</c>）。
 /// 位置と大きさは物理ピクセルのまま <c>SetWindowPos</c> で当てる。
 /// </para>
 /// <para>

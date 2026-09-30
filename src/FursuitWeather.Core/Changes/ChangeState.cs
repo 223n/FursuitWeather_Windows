@@ -70,7 +70,7 @@ public sealed record ChangeState
     /// <param name="forecast">予報。</param>
     /// <param name="hour">基準にする時間。</param>
     /// <param name="alertActive">公式のアラートが出ているか。</param>
-    /// <param name="alertTargetDate">発表の対象日。無ければ空。</param>
+    /// <param name="alertTargetDate">発表の対象日。なければ空。</param>
     /// <param name="alertSpecial">特別警戒か。</param>
     /// <param name="locationKey">地点の識別子。</param>
     /// <param name="now">いまの時刻。</param>

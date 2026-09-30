@@ -33,7 +33,7 @@ public sealed class DisplayBandTests
     [Fact]
     public void いまより短い時間が無ければ出さない()
     {
-        // いまの行を「最も厳しい時間」として帯に重ねない
+        // いまの行を「もっとも厳しい時間」として帯に重ねない
         var current = Hour("2026-08-15T10:00", 20);
         var forecast = Forecast(current, Hour("2026-08-15T11:00", 20), Hour("2026-08-15T12:00", 30));
 

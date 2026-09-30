@@ -106,7 +106,7 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
 
     /// <summary>取得した内容を映す。</summary>
     /// <param name="forecast">予報。</param>
-    /// <param name="alert">公式の発表。無ければ null。</param>
+    /// <param name="alert">公式の発表。なければ null。</param>
     /// <param name="placeName">地点の表示名。</param>
     /// <param name="now">いまの時刻。</param>
     public void Apply(ForecastResponse forecast, HeatAlert? alert, string placeName, DateTimeOffset now)
@@ -168,7 +168,7 @@ internal sealed class WidgetViewModel : INotifyPropertyChanged
 
         if (_pending)
         {
-            // まだ一度も取れていない。古い判定は出ていないが、何も分からないことを伝える
+            // まだ一度も取れていない。古い判定は出ていないが、何もわからないことを伝える
             _baseStatus = failures <= 1
                 ? "予報をまだ取得できていません。時間をおいて試します。"
                 : string.Create(CultureInfo.InvariantCulture, $"予報をまだ取得できていません（{failures}回続けて失敗）。");

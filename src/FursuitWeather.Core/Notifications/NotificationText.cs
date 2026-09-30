@@ -31,7 +31,7 @@ public static class NotificationText
     /// </summary>
     /// <param name="notification">出すべき通知。</param>
     /// <param name="placeName">地点の表示名。</param>
-    /// <param name="alert">公式の発表。無ければ null。</param>
+    /// <param name="alert">公式の発表。なければ null。</param>
     /// <returns>組み上がった文面。</returns>
     public static NotificationMessage Build(PendingNotification notification, string placeName, HeatAlert? alert = null)
     {

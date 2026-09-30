@@ -182,7 +182,7 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 # できあがりの名前はここが決める。
 # .iss の側で組み立てると、探す側と食い違ったときに黙って見失う。
-# 実際に -noruntime を足したとき、*-setup.exe のフィルタから外れて落ちた
+# 実際に -noruntime を足したとき、*-setup.exe のフィルターから外れて落ちた
 $baseName = "FursuitWeather-$version-x64-setup"
 
 $isccArgs = @(

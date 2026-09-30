@@ -9,7 +9,7 @@ namespace FursuitWeather.Widget.Services;
 
 /// <summary>取得した内容。</summary>
 /// <param name="Forecast">予報。</param>
-/// <param name="Alert">公式の発表。無ければ null。</param>
+/// <param name="Alert">公式の発表。なければ null。</param>
 /// <param name="RetrievedAt">取得した時刻。</param>
 public sealed record ForecastSnapshot(ForecastResponse Forecast, HeatAlert? Alert, DateTimeOffset RetrievedAt);
 

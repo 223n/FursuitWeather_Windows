@@ -50,7 +50,7 @@ public sealed record UpdateConditions
     /// </summary>
     /// <remarks>
     /// <c>GetInternetConnectionProfile()</c> は null を返しうる。
-    /// 分からないときは安全側に倒し、真として渡すこと。
+    /// わからないときは安全側に倒し、真として渡すこと。
     /// </remarks>
     public bool IsMetered { get; init; }
 
@@ -182,7 +182,7 @@ public static class UpdateGate
         ArgumentNullException.ThrowIfNull(conditions);
 
         // 前回が途中で終わっているときは、自動の扱いでも再実行しない。
-        // 無人で壊れた状態へ上書きを繰り返すのが最も危ない。
+        // 無人で壊れた状態へ上書きを繰り返すのがもっとも危ない。
         // モードより先に見る。押すのは利用者だとしても、確認は挟ませる
         if (state.HasInterruptedInstall)
         {
@@ -235,7 +235,7 @@ public static class UpdateGate
     /// <param name="reason">理由。</param>
     /// <returns>説明の文。</returns>
     /// <remarks>
-    /// 「なぜ更新されないのか分からない」を作らないために要る。
+    /// 「なぜ更新されないのかわからない」を作らないために要る。
     /// 文の隣には必ず「今すぐ実行」を置くこと。
     /// </remarks>
     public static string Describe(UpdateHoldReason reason) => reason switch

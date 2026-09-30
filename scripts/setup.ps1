@@ -223,7 +223,7 @@ Write-Step 'テンプレート由来の名前を、このリポジトリのも�
 .SYNOPSIS
 ファイルの中の文字列を置き換える。変えたときだけファイル名を返す。
 .DESCRIPTION
-UTF-8（BOM無し）と改行 LF を保つ。
+UTF-8（BOMなし）と改行 LF を保つ。
 元の shell 版は node を呼んでいたが、PowerShell では標準の機能で足りるため依存を減らした。
 -DryRun のときは書き込まないが、変えるものとして数える（まとめの表示を実際と合わせるため）。
 #>
@@ -234,7 +234,7 @@ function Update-TemplateName {
         [Parameter(Mandatory)][string]$To
     )
 
-    # 置き換える意味が無いものは触らない（テンプレートと持ち主が同じ場合など）
+    # 置き換える意味がないものは触らない（テンプレートと持ち主が同じ場合など）
     if ($From -ceq $To) { return $null }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
 

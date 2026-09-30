@@ -6,7 +6,7 @@ public sealed record GeocodeResult
     /// <summary>地名。</summary>
     public string Name { get; init; } = string.Empty;
 
-    /// <summary>都道府県などの上位の区分。分からなければ空。</summary>
+    /// <summary>都道府県などの上位の区分。わからなければ空。</summary>
     public string Admin1 { get; init; } = string.Empty;
 
     /// <summary>緯度。</summary>

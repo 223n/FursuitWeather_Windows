@@ -122,7 +122,7 @@ public sealed record UpdateState
     /// </summary>
     /// <remarks>
     /// 見つけたときは、自動の扱いでも再実行せずに確認を挟む。
-    /// 無人で壊れた状態へ上書きを繰り返すのが、最も危ない。
+    /// 無人で壊れた状態へ上書きを繰り返すのが、もっとも危ない。
     /// </remarks>
     public bool HasInterruptedInstall { get; init; }
 

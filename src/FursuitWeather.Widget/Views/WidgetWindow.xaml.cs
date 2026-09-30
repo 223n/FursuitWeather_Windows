@@ -232,7 +232,7 @@ public partial class WidgetWindow : Window, IDisposable
         return IntPtr.Zero;
     }
 
-    /// <summary>前に置いた位置へ戻す。無ければ主モニターの右上へ置く。</summary>
+    /// <summary>前に置いた位置へ戻す。なければ主モニターの右上へ置く。</summary>
     /// <remarks>右下はトーストの出現位置と衝突するため避ける。</remarks>
     private void PositionAtTopRight()
     {
@@ -261,7 +261,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// <remarks>
     /// モニターの構成が変わると、保存した位置が画面の外になることがある。
     /// 小窓はタスクバーにもAlt+Tabにも出ないため、
-    /// 画面の外に出ると掴む手段が無くなる。復元の前に必ず確かめる。
+    /// 画面の外に出ると掴む手段がなくなる。復元の前に必ず確かめる。
     /// </remarks>
     private bool IsMostlyVisible(double left, double top)
     {
@@ -472,7 +472,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// <c>--self-test-update-install</c> を付けると、取得のあとにインストールまで進む。
     /// 「更新をインストール」を押したのと同じ経路を通る。
     /// 入れるのは署名とハッシュを通したものだけで、押した場合と変わらない。
-    /// 引き渡しは自分を終えるため、人が画面を触らずに確かめる手段が他に無い。
+    /// 引き渡しは自分を終えるため、人が画面を触らずに確かめる手段が他にない。
     /// </remarks>
     private async Task RunUpdateSelfTestAsync(bool install)
     {
@@ -561,7 +561,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// <param name="message">届かなかった通知。</param>
     /// <remarks>
     /// <para>
-    /// トーストが出せないのは、ランタイムが無いときと、
+    /// トーストが出せないのは、ランタイムがないときと、
     /// 利用者がWindowsの側で通知を切っているときである。
     /// どちらでも、安全に関わる知らせを黙って捨てない。
     /// </para>
@@ -1167,7 +1167,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// 扱いは起動の引数で決まっており、ここでは変えない。
     /// 種類を読む <c>GetActivatedEventArgs</c> は、COM の呼び出しが来ないと待ったうえで例外を投げるため、
     /// UIのスレッドを待たせずに読む（<see cref="ToastNotifier.ReadNotificationActivationAsync"/>）。
-    /// 登録していなければ読まない。COM の呼び出しを受ける口が無く、待つだけになるためである。
+    /// 登録していなければ読まない。COM の呼び出しを受ける口がなく、待つだけになるためである。
     /// </remarks>
     private async Task ConfirmNotificationActivationAsync()
     {
@@ -1320,7 +1320,7 @@ public partial class WidgetWindow : Window, IDisposable
     /// </summary>
     /// <remarks>
     /// 終えると決めた印を先に立てる。
-    /// 掲示の窓が閉じると小窓を出し直す作りのため、印が無いと終了の途中で出そうとする。
+    /// 掲示の窓が閉じると小窓を出し直す作りのため、印がないと終了の途中で出そうとする。
     /// </remarks>
     private void ShutdownApp()
     {

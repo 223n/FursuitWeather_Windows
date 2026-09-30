@@ -34,7 +34,7 @@ public sealed record HeatAlert
 public sealed record AlertResponse
 {
     /// <summary>
-    /// 発表の内容。発表が無いとき、取得に失敗したとき、提供期間の外のときは null。
+    /// 発表の内容。発表がないとき、取得に失敗したとき、提供期間の外のときは null。
     /// </summary>
     /// <remarks>
     /// 上流の異常でも予報の表示を巻き込まないよう、APIは常に200で null を返す。

@@ -151,7 +151,7 @@ public partial class App : Application
         }
         catch (ApplicationException)
         {
-            // 持っていなかった。明け渡すものが無い
+            // 持っていなかった。明け渡すものがない
         }
 
         instance.Dispose();

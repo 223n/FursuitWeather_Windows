@@ -39,12 +39,12 @@ public static class EmergencySteps
     /// <summary>
     /// もしものときを加えるか。
     /// </summary>
-    /// <param name="current">いまの時間の行。無ければ null。</param>
+    /// <param name="current">いまの時間の行。なければ null。</param>
     /// <returns>加えるなら true。</returns>
     /// <remarks>
     /// 本体と同じく、いまの屋外判定の <c>grade</c> が3以上で、低温ではないときに加える。
     /// 低温の <c>grade 4</c> に熱中症の手順を出すのは誤誘導になる。
-    /// 判定が無いときは加えない。
+    /// 判定がないときは加えない。
     /// </remarks>
     public static bool ShouldShow(HourForecast? current) =>
         current is not null &&

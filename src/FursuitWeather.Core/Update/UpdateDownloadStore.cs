@@ -41,7 +41,7 @@ public sealed class UpdateDownload : IDisposable
     /// <returns>書き込み用のストリーム。</returns>
     /// <remarks>
     /// <para>
-    /// <c>FileMode.CreateNew</c> で作る。既にあれば失敗させる。
+    /// <c>FileMode.CreateNew</c> で作る。すでにあれば失敗させる。
     /// 上書きを許すと、狙って置かれたファイルへ書き足す形になりうる。
     /// </para>
     /// <para>
@@ -141,7 +141,7 @@ public sealed class UpdateDownloadStore
     /// <returns>置き場所。</returns>
     /// <remarks>
     /// ディレクトリの名前は毎回変える。
-    /// 既に同じ名前があれば作り直す。
+    /// すでに同じ名前があれば作り直す。
     /// </remarks>
     public UpdateDownload Create(string fileName)
     {
@@ -172,7 +172,7 @@ public sealed class UpdateDownloadStore
     /// <param name="fileName">ファイルの名前。</param>
     /// <param name="size">期待する大きさ。</param>
     /// <param name="sha256">期待するSHA-256。小文字の16進。</param>
-    /// <returns>見つかれば、掴んだ状態の置き場所。無ければ null。</returns>
+    /// <returns>見つかれば、掴んだ状態の置き場所。なければ null。</returns>
     /// <remarks>
     /// <para>
     /// 取り直すと、200MB近くを確認や再起動のたびに落とすことになる。
@@ -260,7 +260,7 @@ public sealed class UpdateDownloadStore
             return false;
         }
 
-        // 環境に関わらず、この3つは常に拒む
+        // 環境にかかわらず、この3つは常に拒む
         return !name.Contains('/', StringComparison.Ordinal) &&
             !name.Contains('\\', StringComparison.Ordinal) &&
             !name.Contains(':', StringComparison.Ordinal) &&

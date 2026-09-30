@@ -3,7 +3,7 @@ namespace FursuitWeather.Core.Update;
 /// <summary>前回のインストールを確定した結果。</summary>
 public enum InstallOutcome
 {
-    /// <summary>確定するものが無かった。</summary>
+    /// <summary>確定するものがなかった。</summary>
     None,
 
     /// <summary>狙った版で起動できた。</summary>
@@ -78,7 +78,7 @@ public static class UpdateLedger
     /// <para>
     /// 下回っていれば、途中で終わったとみなす。
     /// <b>自動の扱いでも再実行はせず、確認を挟む。</b>
-    /// 無人で壊れた状態へ上書きを繰り返すのが、最も危ない。
+    /// 無人で壊れた状態へ上書きを繰り返すのが、もっとも危ない。
     /// </para>
     /// </remarks>
     public static (UpdateState State, InstallOutcome Outcome) Reconcile(
@@ -149,7 +149,7 @@ public static class UpdateLedger
     /// </summary>
     /// <param name="state">いまの状態。</param>
     /// <param name="running">いま動いている版。</param>
-    /// <returns>書き入れたあとの状態。解くものが無ければ同じもの。</returns>
+    /// <returns>書き入れたあとの状態。解くものがなければ同じもの。</returns>
     /// <remarks>
     /// <para>
     /// Releasesのページから手で入れた場合は <see cref="UpdateStage.Installing"/> を通らない。
@@ -190,7 +190,7 @@ public static class UpdateLedger
     /// 扱いを一度も選んでいない利用者に、いまの既定を当てる。
     /// </summary>
     /// <param name="state">読み込んだ状態。</param>
-    /// <returns>当てたあとの状態。当てるものが無ければ同じもの。</returns>
+    /// <returns>当てたあとの状態。当てるものがなければ同じもの。</returns>
     /// <remarks>
     /// <para>
     /// <b>利用者が自分で選んだ扱いは上書きしない。</b>
@@ -238,7 +238,7 @@ public static class UpdateLedger
     /// <returns>書き入れたあとの状態。</returns>
     /// <remarks>
     /// <para>
-    /// 確認の時刻は、成否に関わらず進める。
+    /// 確認の時刻は、成否にかかわらず進める。
     /// 進めないと、失敗が続くあいだ30秒ごとに取りに行き続ける。
     /// </para>
     /// <para>
@@ -312,7 +312,7 @@ public static class UpdateLedger
     /// <returns>書き入れたあとの状態。</returns>
     /// <remarks>
     /// 取得の失敗の数を戻す。
-    /// 取れたあとも数を残すと、時々の失敗が積もって上限に届く。
+    /// 取れたあとも数を残すと、ときどきの失敗が積もって上限に届く。
     /// </remarks>
     public static UpdateState RecordDownloaded(UpdateState state)
     {

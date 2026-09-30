@@ -119,7 +119,7 @@ public static class UpdateCheckSchedule
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        // 起動の直後は行かない。この待ちは、前回いつ確認したかに関わらず効く
+        // 起動の直後は行かない。この待ちは、前回いつ確認したかにかかわらず効く
         if (uptime < StartupDelay(phase, options))
         {
             return false;
@@ -172,8 +172,8 @@ public static class UpdateCheckSchedule
     /// 確かな答えを得られなかった確認のあと、まだ待つべきか。
     /// </summary>
     /// <param name="failures">続けて答えを得られなかった回数。</param>
-    /// <param name="lastWallClock">最後に答えを得られなかった壁時計の時刻。無ければ null。</param>
-    /// <param name="lastMonotonic">同じときの単調時刻。無ければ null。</param>
+    /// <param name="lastWallClock">最後に答えを得られなかった壁時計の時刻。なければ null。</param>
+    /// <param name="lastMonotonic">同じときの単調時刻。なければ null。</param>
     /// <param name="wallClock">いまの壁時計。</param>
     /// <param name="monotonic">いまの単調時刻。</param>
     /// <returns>待つべきなら true。</returns>
