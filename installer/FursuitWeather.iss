@@ -280,9 +280,14 @@ end;
 
   すでに新しい版が入っているときは 0x80073D06 が返る。これは失敗ではない。 }
 const
-  { 0x80073D06 = ERROR_PACKAGE_ALREADY_EXISTS。
-    Inno の Integer は符号付き32ビットのため、負の値として書く }
-  ERROR_PACKAGE_ALREADY_EXISTS = -2146498810;
+  { 0x80073D06 = ERROR_INSTALL_PACKAGE_DOWNGRADE。同じパッケージの新しい版がすでに入っている。
+    Windows App SDK の文書は、インストーラーのこの値を「1つ以上のパッケージが入らなかった」と説明する。
+    入らなかったのは新しい版があるためで、アプリはその版を使えるため、失敗とはみなさない。
+
+    Inno の Integer は符号付き32ビットのため、負の値として書く（0x80073D06 - 0x100000000）。
+    以前は -2146498810 と書いていたが、これは 0x800F0706 で、この値を失敗と判定していた。
+    名前も ERROR_PACKAGE_ALREADY_EXISTS（こちらは 0x80073CFB）と取り違えていた }
+  ERROR_INSTALL_PACKAGE_DOWNGRADE = -2147009274;
 
 function InstallRuntime(): Boolean;
 var
@@ -307,7 +312,7 @@ begin
     Exit;
   end;
 
-  Result := (ResultCode = 0) or (ResultCode = ERROR_PACKAGE_ALREADY_EXISTS);
+  Result := (ResultCode = 0) or (ResultCode = ERROR_INSTALL_PACKAGE_DOWNGRADE);
   { Format の配列引数を次の行へ送らないこと。
     Inno は行頭が [ の行をセクションの見出しとして読むため、Invalid section tag になる }
   if Result then
