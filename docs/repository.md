@@ -84,6 +84,11 @@ Windowsのセルフホストのランナーには、Git for Windows（`git`と`b
 `bash`は`installer.yml`のうち、`shell: bash`のステップが使います。
 `.NET` SDKはワークフローが用意します。
 
+`installer.yml`は、後始末の検査のためにWindows App SDKのランタイムをランナーへ入れ、`--uninstall-cleanup`を走らせます。
+入れたランタイムは、ランナーに残ります。
+後始末は、ランナーを動かす利用者の`HKCU`から自動起動の登録（`FursuitWeather`）を消します。
+FursuitWeatherを常用している利用者のアカウントで、ランナーを動かさないでください。
+
 公開リポジトリでセルフホストのランナーを使うと、フォークからのPull Requestで任意のコードが動くため、非公開のリポジトリで使ってください。
 
 ## ワークフローの一覧
