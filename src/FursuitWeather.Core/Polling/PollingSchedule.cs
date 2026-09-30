@@ -54,10 +54,10 @@ public static class PollInterval
 /// </remarks>
 public sealed record PollingSchedule
 {
-    /// <summary>最後に取りに成功した壁時計の時刻。まだ無ければ null。</summary>
+    /// <summary>最後に取りに成功した壁時計の時刻。まだなければ null。</summary>
     public DateTimeOffset? LastSuccessWallClock { get; init; }
 
-    /// <summary>最後に取りに成功した単調時刻。まだ無ければ null。</summary>
+    /// <summary>最後に取りに成功した単調時刻。まだなければ null。</summary>
     public TimeSpan? LastSuccessMonotonic { get; init; }
 
     /// <summary>連続して失敗した回数。</summary>

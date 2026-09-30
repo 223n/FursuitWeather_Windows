@@ -94,7 +94,7 @@ public sealed class ForecastViewTests
     }
 
     [Fact]
-    public void 当日の行が無ければ選べない()
+    public void 当日の行がなければ選べない()
     {
         var forecast = WithHours("2026-08-16T10:00", "2026-08-16T11:00");
         var now = JstTime.ToInstant("2026-08-15T10:30")!.Value;

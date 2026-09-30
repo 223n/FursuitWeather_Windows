@@ -38,7 +38,7 @@ public sealed class NationalService : IDisposable
     /// <summary>取得に成功したときに起きる。</summary>
     public event EventHandler? Updated;
 
-    /// <summary>手元にある全国の天気。まだ無ければ null。</summary>
+    /// <summary>手元にある全国の天気。まだなければ null。</summary>
     public NationalResponse? Latest { get; private set; }
 
     /// <summary>直近の取得に失敗したか。</summary>

@@ -3,7 +3,7 @@ namespace FursuitWeather.Core.Notifications;
 /// <summary>アプリがどこから起動されたか。</summary>
 public enum LaunchSource
 {
-    /// <summary>通知とは関係の無い起動。自動起動やスタートメニューなど。</summary>
+    /// <summary>通知とは関係のない起動。自動起動やスタートメニューなど。</summary>
     Normal,
 
     /// <summary>通知を押して起動された。活性化の種類が通知だった。</summary>

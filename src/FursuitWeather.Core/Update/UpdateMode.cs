@@ -41,7 +41,7 @@ public enum UpdateMode
     /// 取得だけ自動。適用は利用者が決める。
     /// </summary>
     /// <remarks>
-    /// 押すのは1回で、押した瞬間に待ち時間が無い。
+    /// 押すのは1回で、押した瞬間に待ち時間がない。
     /// </remarks>
     DownloadOnly,
 
@@ -99,11 +99,11 @@ public enum UpdateStage
 /// </summary>
 /// <remarks>
 /// <b>保留したときは理由を必ず見せ、「今すぐ実行」の脱出口を置く。</b>
-/// 「なぜ更新されないのか分からない」が、更新の仕組みに対する最大の不満の源である。
+/// 「なぜ更新されないのかわからない」が、更新の仕組みに対する最大の不満の源である。
 /// </remarks>
 public enum UpdateHoldReason
 {
-    /// <summary>見送る理由が無い。</summary>
+    /// <summary>見送る理由がない。</summary>
     None,
 
     /// <summary>従量制課金の接続である。</summary>

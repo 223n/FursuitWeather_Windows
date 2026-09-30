@@ -4,7 +4,7 @@ namespace FursuitWeather.Widget.Services;
 /// <remarks>
 /// 最背面への固定は用意しない。
 /// 実測の結果、ほかの窓に隠れて見えないうえ、「デスクトップの表示」でも
-/// 見えなくなると分かったためである。
+/// 見えなくなるとわかったためである。
 /// 詳しくは <c>docs/open-questions.md</c> の「小窓の高さ」にある。
 /// </remarks>
 public enum WindowLayer

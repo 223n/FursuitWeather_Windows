@@ -83,7 +83,7 @@ public sealed class NotificationDispatcher
     /// 取得した内容から通知を出す。
     /// </summary>
     /// <param name="forecast">予報。</param>
-    /// <param name="alert">公式の発表。無ければ null。</param>
+    /// <param name="alert">公式の発表。なければ null。</param>
     /// <param name="coordinate">地点。丸めたあとの座標を識別子に使う。</param>
     /// <param name="placeName">地点の表示名。</param>
     /// <param name="now">いまの時刻。</param>
@@ -123,7 +123,7 @@ public sealed class NotificationDispatcher
 
         _state = plan.State;
 
-        // 出せたかに関わらず保存する。
+        // 出せたかにかかわらず保存する。
         // 出せなかったぶんを保存せずに戻すと、壊れているあいだ11分ごとに同じ通知を出し続ける。
         // 届かなかったぶんは FellBack で小窓とトレイへ倒す
         NotificationStateStore.Save(_state);
@@ -161,7 +161,7 @@ public sealed class NotificationDispatcher
     /// いまの予報で悪化が起きたとみなし、出るはずの文面を組み立てる。
     /// </summary>
     /// <param name="forecast">予報。</param>
-    /// <param name="alert">公式の発表。無ければ null。</param>
+    /// <param name="alert">公式の発表。なければ null。</param>
     /// <param name="coordinate">地点。</param>
     /// <param name="placeName">地点の表示名。</param>
     /// <param name="now">いまの時刻。</param>

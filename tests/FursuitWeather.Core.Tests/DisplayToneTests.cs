@@ -88,7 +88,7 @@ public sealed class DisplayToneTests
     }
 
     [Fact]
-    public void 判定が無ければもしものときを加えない()
+    public void 判定がなければもしものときを加えない()
     {
         Assert.False(EmergencySteps.ShouldShow(null));
     }

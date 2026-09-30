@@ -29,7 +29,7 @@ internal sealed record MonitorChoiceItem(string Label, string? Id);
 /// </para>
 /// <para>
 /// 設計にある「計測中はインストールしない」は置かない。
-/// 計測の機能がまだ無く、効かない飾りになるためである。
+/// 計測の機能がまだなく、効かない飾りになるためである。
 /// </para>
 /// </remarks>
 public partial class SettingsWindow : Window
@@ -179,7 +179,7 @@ public partial class SettingsWindow : Window
             var path = Environment.ProcessPath;
             if (path is null)
             {
-                ShowError("実行ファイルの場所が分からないため、自動起動を変えられませんでした。");
+                ShowError("実行ファイルの場所がわからないため、自動起動を変えられませんでした。");
                 StartupCheck.IsChecked = StartupRegistration.IsEffectivelyEnabled();
                 return;
             }
@@ -273,7 +273,7 @@ public partial class SettingsWindow : Window
     /// 地名か郵便番号で地点を探す。
     /// </summary>
     /// <remarks>
-    /// 利用者が押したときだけ呼ぶ。打つたびに呼ぶと、本体のAPIを無駄に叩く。
+    /// 利用者が押したときだけ呼ぶ。打つたびに呼ぶと、本体のAPIをムダに叩く。
     /// </remarks>
     private async void OnSearch(object sender, RoutedEventArgs e)
     {

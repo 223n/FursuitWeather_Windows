@@ -128,7 +128,7 @@ Filename: "{app}\{#AppExeName}"; Description: "{#AppName} を起動する"; Flag
 { 更新から呼ばれたときは、呼び元のプロセスが終わるのを待つ。
 
   PrivilegesRequired=lowest では restartreplace が効かないと公式に明記されている。
-  そのため、実行中の exe を置き換える方法は「相手が自分で終わる」以外に無い。
+  そのため、実行中の exe を置き換える方法は「相手が自分で終わる」以外にない。
 
   呼び元は状態を書いてからインストーラーを起動し、すぐ自分を終える。
   ここで終了を待ってからファイルを触る。AppMutex の判定より前に走らせる必要がある。 }
@@ -208,7 +208,7 @@ begin
   Result := True;
 end;
 
-{ 本体を起動し直す。起動できたかに関わらず、二度は試さない }
+{ 本体を起動し直す。起動できたかにかかわらず、二度は試さない }
 procedure Relaunch(const Situation: string);
 var
   AppDir, Exe: string;
@@ -227,7 +227,7 @@ begin
   Exe := AppDir + '\{#AppExeName}';
   if not FileExists(Exe) then
   begin
-    Log('更新: 起動し直す本体が無い: ' + Exe);
+    Log('更新: 起動し直す本体がない: ' + Exe);
     Exit;
   end;
 
@@ -294,7 +294,7 @@ begin
   Installer := ExpandConstant('{tmp}\') + ExtractFileName('{#RuntimeInstaller}');
   if not FileExists(Installer) then
   begin
-    Log('ランタイム: 同梱したはずのファイルが無い: ' + Installer);
+    Log('ランタイム: 同梱したはずのファイルがない: ' + Installer);
     Result := False;
     Exit;
   end;
@@ -338,7 +338,7 @@ begin
     docs/architecture.md が「アプリが壊れて起動できない場合に備える」として要求している。
 
     本体は Windows App SDK のブートストラッパーが ModuleInitializer から走るため、
-    ランタイムが無い端末では Main へ到達せずに終了する。
+    ランタイムがない端末では Main へ到達せずに終了する。
     そのとき --uninstall-cleanup は1行も動かず、自動起動の登録が端末に残り、
     サインインのたびに Windows が消えた exe を起動しようとする。 }
   RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
@@ -370,7 +370,7 @@ begin
     Exit;
 
   { 自動起動を先に消す。本体の起動に頼らない。
-    ランタイムが無い端末では本体が Main へ到達せずに終わるため、
+    ランタイムがない端末では本体が Main へ到達せずに終わるため、
     あとに回すと消し残す }
   RemoveStartupEntries();
 
@@ -378,7 +378,7 @@ begin
     これは best-effort である。起動できなくても後始末は続ける }
   Exe := ExpandConstant('{app}\{#AppExeName}');
   if not FileExists(Exe) then
-    Log('後始末: 本体が無いため起動を飛ばす: ' + Exe)
+    Log('後始末: 本体がないため起動を飛ばす: ' + Exe)
   else if not Exec(Exe, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Log('後始末: 本体を起動できなかった')
   else if ResultCode = 0 then
@@ -409,7 +409,7 @@ begin
   begin
     { 止めないが、実態どおりに伝える。
       ブートストラッパーが ModuleInitializer から走るため、
-      ランタイムが無いとアプリは起動そのものができない。
+      ランタイムがないとアプリは起動そのものができない。
       「通知だけが出ない」と伝えるのは誤りだった }
     MsgBox(
       'Windows App SDK のランタイムを入れられませんでした。' + #13#10 +

@@ -29,14 +29,14 @@ public sealed record PendingNotification
     public string CurrentLevel { get; init; } = string.Empty;
 
     /// <summary>
-    /// 前回のレベルの日本語ラベル。分からないときは空。
+    /// 前回のレベルの日本語ラベル。わからないときは空。
     /// </summary>
     /// <remarks>
     /// APIが返したラベルをそのまま運ぶ。レベルIDから日本語へ引く表は持たない。
     /// </remarks>
     public string PreviousLabel { get; init; } = string.Empty;
 
-    /// <summary>いまのレベルの日本語ラベル。分からないときは空。</summary>
+    /// <summary>いまのレベルの日本語ラベル。わからないときは空。</summary>
     public string CurrentLabel { get; init; } = string.Empty;
 
     /// <summary>内容の署名。同じ署名の通知は再び出さない。</summary>
@@ -73,5 +73,5 @@ public sealed record PendingNotification
 
 /// <summary>判定の結果。</summary>
 /// <param name="State">次に保存する状態。</param>
-/// <param name="Notifications">出すべき通知。無ければ空。</param>
+/// <param name="Notifications">出すべき通知。なければ空。</param>
 public sealed record DetectionResult(ChangeState State, IReadOnlyList<PendingNotification> Notifications);

@@ -103,7 +103,7 @@ public sealed class BriefingSchedulerTests
     }
 
     [Fact]
-    public void 今日の予報が無ければ作らない()
+    public void 今日の予報がなければ作らない()
     {
         Assert.Null(BriefingScheduler.TryBuild(
             Forecast(Day("2026-08-16")), false, null, At("2026-08-15T08:00")));
@@ -147,7 +147,7 @@ public sealed class BriefingSchedulerTests
     }
 
     [Fact]
-    public void 適した時間帯が無いことを伝えられる()
+    public void 適した時間帯がないことを伝えられる()
     {
         var content = BriefingScheduler.TryBuild(
             Forecast(Day("2026-08-15")), false, null, At("2026-08-15T08:00"));

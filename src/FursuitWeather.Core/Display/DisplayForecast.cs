@@ -73,7 +73,7 @@ public static class DisplayForecast
     /// <summary>今日の日ごとの予報。いまの判定のスライドの最高と最低に使う。</summary>
     /// <param name="forecast">予報。</param>
     /// <param name="now">いまの時刻。</param>
-    /// <returns>今日の予報。無ければ null。</returns>
+    /// <returns>今日の予報。なければ null。</returns>
     public static DayForecast? TodayOf(ForecastResponse forecast, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(forecast);

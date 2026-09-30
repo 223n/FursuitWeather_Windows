@@ -14,7 +14,7 @@ namespace FursuitWeather.Widget.Services;
 /// ここは Windows のAPIを呼んで値にするだけである。
 /// </para>
 /// <para>
-/// <b>分からないときは安全側に倒す。</b>
+/// <b>わからないときは安全側に倒す。</b>
 /// 従量制課金かどうかが読めないときは、課金されるものとして扱う。
 /// 大きな取得を黙って流すほうが、取得を見送るより害が大きい。
 /// </para>
@@ -37,7 +37,7 @@ public static partial class UpdateEnvironment
     private static partial int SHQueryUserNotificationState(out int state);
 
     /// <summary>いまの様子を読む。</summary>
-    /// <param name="downloadSize">これから取得するファイルの大きさ。分からなければ0。</param>
+    /// <param name="downloadSize">これから取得するファイルの大きさ。わからなければ0。</param>
     /// <returns>ゲートへ渡す値。</returns>
     public static UpdateConditions Read(long downloadSize) => new()
     {
@@ -97,7 +97,7 @@ public static partial class UpdateEnvironment
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Windows App SDK の <c>PowerManager</c> を使う。すでに依存しているため追加の費用が無い。
+    /// Windows App SDK の <c>PowerManager</c> を使う。すでに依存しているため追加の費用がない。
     /// </para>
     /// <para>
     /// 省電力の状態だけには頼らない。

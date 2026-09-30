@@ -6,7 +6,7 @@ namespace FursuitWeather.Core.Display;
 public sealed record DisplayMonitor(string Id, bool IsPrimary);
 
 /// <summary>掲示を出すモニターの決め方の結果。</summary>
-/// <param name="Monitor">出すモニター。1台も無ければ null。</param>
+/// <param name="Monitor">出すモニター。1台もなければ null。</param>
 /// <param name="FellBack">選んだモニターが見つからず、主モニターへ落としたか。</param>
 public sealed record MonitorDecision(DisplayMonitor? Monitor, bool FellBack);
 
@@ -19,7 +19,7 @@ public sealed record MonitorDecision(DisplayMonitor? Monitor, bool FellBack);
 public static class MonitorChoice
 {
     /// <summary>
-    /// 選んだモニターがあればそれを、無ければ主モニターを選ぶ。
+    /// 選んだモニターがあればそれを、なければ主モニターを選ぶ。
     /// </summary>
     /// <param name="preferredId">設定で選んだモニター。選んでいなければ null。</param>
     /// <param name="monitors">いまつながっているモニター。</param>

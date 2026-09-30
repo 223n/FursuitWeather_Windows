@@ -180,9 +180,9 @@ public sealed class UpdateDownloadStoreTests : IDisposable
     }
 
     [Fact]
-    public void 根が無くても掃除で落ちない()
+    public void 根がなくても掃除で落ちない()
     {
-        new UpdateDownloadStore(Path.Combine(_root, "まだ無い")).CleanExcept(null);
+        new UpdateDownloadStore(Path.Combine(_root, "まだない")).CleanExcept(null);
     }
 
     // ---- 置いてあるものを使い回す
@@ -241,9 +241,9 @@ public sealed class UpdateDownloadStoreTests : IDisposable
     }
 
     [Fact]
-    public void 根が無くても探して落ちない()
+    public void 根がなくても探して落ちない()
     {
-        Assert.Null(new UpdateDownloadStore(Path.Combine(_root, "まだ無い"))
+        Assert.Null(new UpdateDownloadStore(Path.Combine(_root, "まだない"))
             .FindVerified("setup.exe", 1, Sha256Of("x")));
     }
 

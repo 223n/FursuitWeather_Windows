@@ -17,7 +17,7 @@ name: リリース
 # 一度だけ要る設定:
 #   Settings > Actions > General > Workflow permissions で
 #   「Allow GitHub Actions to create and approve pull requests」を有効にする。
-#   これが無いと gh pr create が拒まれる。
+#   これがないと gh pr create が拒まれる。
 on:
   workflow_dispatch:
     inputs:
@@ -48,7 +48,7 @@ jobs:
   prepare:
     name: リリースブランチとPRを作る
     # セルフホストのランナーがあれば、リポジトリの変数 RUNS_ON にそのラベル（例: self-hosted）を設定する。
-    # 無ければ GitHub がホストする ubuntu-latest で動く
+    # なければ GitHub がホストする ubuntu-latest で動く
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
@@ -67,7 +67,7 @@ jobs:
         # GitHub がホストするランナーには入っている。セルフホストのランナーでは自分で入れる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 
@@ -92,10 +92,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: developブランチがあることを確かめる
-        # 無いまま checkout に進むと、原因の分かりにくい失敗になる
+        # ないまま checkout に進むと、原因のわかりにくい失敗になる
         run: |
           if ! gh api "repos/${GITHUB_REPOSITORY}/branches/${DEVELOP_BRANCH}" --silent 2>/dev/null; then
-            echo "::error::${DEVELOP_BRANCH} ブランチが無い。main から作ってから実行する"
+            echo "::error::${DEVELOP_BRANCH} ブランチがない。main から作ってから実行する"
             exit 1
           fi
 
@@ -108,7 +108,7 @@ jobs:
           fetch-depth: 0
 
       - name: Nodeを用意
-        # 版の比較にも node を使うため、その前に用意する。セルフホストのランナーに Node が無くても動く
+        # 版の比較にも node を使うため、その前に用意する。セルフホストのランナーに Node がなくても動く
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -142,7 +142,7 @@ jobs:
           current="$(node -p "require('./package.json').version")"
           main_version="$(git show "origin/${MAIN_BRANCH}:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)"
           latest_tag="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
-          echo "develop: ${current} / main: ${main_version:-無し} / 最新のタグ: ${latest_tag:-無し}"
+          echo "develop: ${current} / main: ${main_version:-なし} / 最新のタグ: ${latest_tag:-なし}"
 
           node -e '
             const [next, ...bases] = process.argv.slice(1)
@@ -235,7 +235,7 @@ jobs:
           git push --set-upstream origin "${BRANCH}"
 
       - name: リリースノートの下書きを作る
-        # タグはまだ無いが、generate-notes は新しいタグ名でも受け付ける
+        # タグはまだないが、generate-notes は新しいタグ名でも受け付ける
         env:
           TAG: ${{ steps.version.outputs.tag }}
           BRANCH: ${{ steps.version.outputs.branch }}
@@ -282,7 +282,7 @@ jobs:
           echo "url=${url}" >> "$GITHUB_OUTPUT"
 
           # GITHUB_TOKEN が開いた PR ではラベラーが動かないため、ここで付ける。
-          # ラベルが無いリポジトリでも PR は開けるようにする
+          # ラベルがないリポジトリでも PR は開けるようにする
           gh pr edit "${number}" --add-label 'リリース' \
             || echo "::warning::ラベル「リリース」を付けられなかった。.github/labels.yml の同期が済んでいるか確かめる"
 
@@ -308,7 +308,7 @@ jobs:
       - name: GitHub CLIがあることを確かめる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 

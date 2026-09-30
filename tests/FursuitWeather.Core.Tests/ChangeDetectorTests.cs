@@ -421,7 +421,7 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 先読みの窓のうち最も厳しい時間を選ぶ()
+    public void 先読みの窓のうちもっとも厳しい時間を選ぶ()
     {
         var now = At("2026-08-15T10:30");
         var forecast = Forecast(now,
@@ -441,7 +441,7 @@ public sealed class ChangeDetectorTests
         var now = At("2026-08-15T10:30");
         var forecast = Forecast(now,
             Hour("2026-08-15T10:00", 20),
-            // 窓の外。ここが最も厳しくても選ばない
+            // 窓の外。ここがもっとも厳しくても選ばない
             Hour("2026-08-15T20:00", 0, "danger"));
 
         var target = ChangeDetector.SelectTarget(forecast, now, TimeSpan.FromHours(3));
@@ -741,7 +741,7 @@ public sealed class ChangeDetectorTests
     [Fact]
     public void 対象日を知らない古い状態からは一度だけ知らせ直す()
     {
-        // 版を上げる前に書かれた状態には対象日が無い。
+        // 版を上げる前に書かれた状態には対象日がない。
         // 「同じ発表」と見なすと、直後の1日ぶんの発表を取りこぼす。
         // 1回だけ重ねて出すほうを選ぶ
         var now = At("2026-08-15T07:00");
@@ -822,9 +822,9 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 基準が無くても直前の値でわずかな改善を退ける()
+    public void 基準がなくても直前の値でわずかな改善を退ける()
     {
-        // 基準が無いことを「デッドバンド合格」と読んではいけない
+        // 基準がないことを「デッドバンド合格」と読んではいけない
         var now = At("2026-08-15T16:20");
         var state = Baseline(now.AddMinutes(-11), 0, "danger", suitWbgt: 35d, discontinuedAt: null);
         var forecast = Forecast(now,
@@ -837,7 +837,7 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 基準が無くても十分下がれば回復を認める()
+    public void 基準がなくても十分下がれば回復を認める()
     {
         var now = At("2026-08-15T16:20");
         var state = Baseline(now.AddMinutes(-11), 0, "danger", suitWbgt: 35d, discontinuedAt: null);

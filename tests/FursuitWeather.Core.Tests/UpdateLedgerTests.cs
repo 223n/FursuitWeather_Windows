@@ -120,7 +120,7 @@ public sealed class UpdateLedgerTests
     [Fact]
     public void 失敗したら次は確認を挟ませる()
     {
-        // 無人で壊れた状態へ上書きを繰り返すのが最も危ない
+        // 無人で壊れた状態へ上書きを繰り返すのがもっとも危ない
         var (state, _) = UpdateLedger.Reconcile(Installing(), V("0.3.0"), Now);
 
         Assert.True(state.HasInterruptedInstall);
@@ -238,7 +238,7 @@ public sealed class UpdateLedgerTests
     // ---- 確認
 
     [Fact]
-    public void 確認の時刻は成否に関わらず進める()
+    public void 確認の時刻は成否にかかわらず進める()
     {
         // 進めないと、失敗が続くあいだ30秒ごとに取りに行き続ける
         var state = UpdateLedger.RecordCheck(new UpdateState(), Now, TimeSpan.FromHours(3), acceptedManifestAt: null);
@@ -365,7 +365,7 @@ public sealed class UpdateLedgerTests
     }
 
     [Fact]
-    public void 失敗の記録が無ければ何もしない()
+    public void 失敗の記録がなければ何もしない()
     {
         var state = new UpdateState { AutoUpdateDisabled = false };
 
@@ -377,7 +377,7 @@ public sealed class UpdateLedgerTests
     [Fact]
     public void 取得を終えたら取得の失敗を戻す()
     {
-        // 残すと、時々の失敗が積もって上限に届く
+        // 残すと、ときどきの失敗が積もって上限に届く
         var state = UpdateLedger.RecordDownloadFailure(new UpdateState(), "0.4.0", Sha, Now);
         state = UpdateLedger.RecordDownloadFailure(state, "0.4.0", Sha, Now.AddMinutes(2));
 
@@ -481,7 +481,7 @@ public sealed class UpdateLedgerTests
     [Fact]
     public void すでに既定なら同じものを返す()
     {
-        // 同じものを返せば、呼び元は書き直しが要らないと分かる
+        // 同じものを返せば、呼び元は書き直しが要らないとわかる
         var saved = new UpdateState();
 
         Assert.Same(saved, UpdateLedger.ApplyDefaultMode(saved));

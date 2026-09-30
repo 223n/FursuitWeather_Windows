@@ -25,10 +25,10 @@ public sealed record DisplayNoticeInputs
     /// <summary>直近の予報の取得に失敗したか。</summary>
     public bool ForecastFailed { get; init; }
 
-    /// <summary>手元の予報の生成時刻。まだ無ければ null。</summary>
+    /// <summary>手元の予報の生成時刻。まだなければ null。</summary>
     public DateTimeOffset? ForecastGeneratedAt { get; init; }
 
-    /// <summary>手元の全国の天気の生成時刻。まだ無ければ null。</summary>
+    /// <summary>手元の全国の天気の生成時刻。まだなければ null。</summary>
     public DateTimeOffset? NationalGeneratedAt { get; init; }
 
     /// <summary>掲示先のモニターが外れ、ほかのモニターへ移したか。</summary>
@@ -49,7 +49,7 @@ public sealed record DisplayNoticeInputs
     /// <summary>掲示を終えるホットキーを登録できなかったか。</summary>
     public bool HotkeyFailed { get; init; }
 
-    /// <summary>起動したときの更新の成否。無ければ null。</summary>
+    /// <summary>起動したときの更新の成否。なければ null。</summary>
     public string? UpdateResult { get; init; }
 }
 
@@ -64,7 +64,7 @@ public static class DisplayBand
 {
     /// <summary>先読みの幅。</summary>
     /// <remarks>
-    /// 通知の設定に関わらず3時間で固定する。
+    /// 通知の設定にかかわらず3時間で固定する。
     /// トースト（T1）の幅を利用者が変えられるようになっても、掲示は変えない。
     /// </remarks>
     public static readonly TimeSpan LookaheadWindow = TimeSpan.FromHours(3);
@@ -79,9 +79,9 @@ public static class DisplayBand
     /// この先3時間に、いまより厳しい時間があれば選ぶ。
     /// </summary>
     /// <param name="forecast">予報。</param>
-    /// <param name="current">いまの時間の行。無ければ null。</param>
+    /// <param name="current">いまの時間の行。なければ null。</param>
     /// <param name="now">いまの時刻。</param>
-    /// <returns>選んだ行。無ければ null。</returns>
+    /// <returns>選んだ行。なければ null。</returns>
     /// <remarks>
     /// <para>
     /// 掲示のあいだトーストを止める代わりに、トースト（T1）の先読みを帯へ出す。
@@ -89,7 +89,7 @@ public static class DisplayBand
     /// </para>
     /// <para>
     /// 比べるのは連続活動時間で、<c>grade</c> では比べない。
-    /// 低温側には <c>grade 3</c> が無く、<c>optimal</c> から <c>coldCaution</c> へは <c>grade</c> が上がるためである。
+    /// 低温側には <c>grade 3</c> がなく、<c>optimal</c> から <c>coldCaution</c> へは <c>grade</c> が上がるためである。
     /// </para>
     /// </remarks>
     public static HourForecast? Lookahead(ForecastResponse forecast, HourForecast? current, DateTimeOffset now)
@@ -113,7 +113,7 @@ public static class DisplayBand
     /// <summary>
     /// 公式の発表の帯の文を組む。
     /// </summary>
-    /// <param name="alert">発表。無ければ null。</param>
+    /// <param name="alert">発表。なければ null。</param>
     /// <param name="now">いまの時刻。</param>
     /// <returns>帯の文。出さないなら null。</returns>
     /// <remarks>

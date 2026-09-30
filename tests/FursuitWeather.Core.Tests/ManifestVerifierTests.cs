@@ -244,7 +244,7 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Fact]
-    public void 別のアーキテクチャしか無ければ配らない()
+    public void 別のアーキテクチャしかなければ配らない()
     {
         var result = Run(Manifest(arch: "arm64"));
 
@@ -301,7 +301,7 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Fact]
-    public void 大きさが無ければ配らない()
+    public void 大きさがなければ配らない()
     {
         var result = Run(Manifest(size: 0));
 
@@ -318,9 +318,9 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Fact]
-    public void 使用を止める指定を更新が無いときでも伝える()
+    public void 使用を止める指定を更新がないときでも伝える()
     {
-        // 「更新は無いが、いまの版はもう使えない」が成り立つ
+        // 「更新はないが、いまの版はもう使えない」が成り立つ
         var result = Run(Manifest(version: "0.3.0", unsupportedBelow: "0.4.0"));
 
         Assert.Equal(UpdateVerdict.NotNewer, result.Verdict);
@@ -356,7 +356,7 @@ public sealed class ManifestVerifierTests : IDisposable
     }
 
     [Fact]
-    public void 使うチャンネルが無ければ配らない()
+    public void 使うチャンネルがなければ配らない()
     {
         var (bytes, signature) = Sign(new
         {

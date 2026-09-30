@@ -1,6 +1,6 @@
 {
   "name": "fursuitweather-windows",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "着ぐるみ天気予報 FursuitWeather の Windows 向けクライアント。",
   "license": "Apache-2.0",
@@ -15,8 +15,8 @@
     "lint:ja:fix": "textlint --fix ."
   },
   "devDependencies": {
-    "@223n/lint-config-ja": "^1.1.0",
-    "markdownlint-cli2": "^0.23.2",
+    "@223n/lint-config-ja": "^2.1.1",
+    "markdownlint-cli2": "^0.23.3",
     "textlint": "^15.8.0"
   },
   "overrides": {

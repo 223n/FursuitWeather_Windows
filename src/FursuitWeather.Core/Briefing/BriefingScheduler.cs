@@ -14,8 +14,8 @@ namespace FursuitWeather.Core.Briefing;
 /// </para>
 /// <para>
 /// 実測では、那覇は88時間（およそ3.7日）まったく判定が変化しない。
-/// 変化の検知だけを作ると、最も危険な期間に何日も無音になる。
-/// 変化が無くても1日1回は現状を伝えるのが、この層の目的である。
+/// 変化の検知だけを作ると、もっとも危険な期間に何日も無音になる。
+/// 変化がなくても1日1回は現状を伝えるのが、この層の目的である。
 /// </para>
 /// <para>
 /// 純粋な関数として書く。時計もファイルも触らない。
@@ -28,7 +28,7 @@ public static class BriefingScheduler
     /// </summary>
     /// <param name="forecast">予報。</param>
     /// <param name="alertActive">公式の熱中症警戒アラートが出ているか。</param>
-    /// <param name="lastDeliveredDate">最後に出した日付（日本時間）。まだ無ければ null。</param>
+    /// <param name="lastDeliveredDate">最後に出した日付（日本時間）。まだなければ null。</param>
     /// <param name="now">いまの時刻。</param>
     /// <param name="options">調整値。省略すると既定値を使う。</param>
     /// <returns>出すべき中身。出す時期でなければ null。</returns>

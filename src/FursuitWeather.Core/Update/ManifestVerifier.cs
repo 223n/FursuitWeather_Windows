@@ -28,7 +28,7 @@ public enum UpdateVerdict
     /// <summary>このWindowsでは動かない版だった。</summary>
     OsTooOld,
 
-    /// <summary>このアーキテクチャ向けの配布物が無かった。</summary>
+    /// <summary>このアーキテクチャ向けの配布物がなかった。</summary>
     PackageMissing,
 
     /// <summary>配布物の書き方がおかしい。取得先やハッシュが信用できない。</summary>
@@ -41,8 +41,8 @@ public enum UpdateVerdict
 /// <summary>マニフェストを調べた結果。</summary>
 /// <param name="Verdict">結論。</param>
 /// <param name="Manifest">読めたマニフェスト。読めなければ null。</param>
-/// <param name="Channel">使うチャンネル。無ければ null。</param>
-/// <param name="Package">取得する配布物。無ければ null。</param>
+/// <param name="Channel">使うチャンネル。なければ null。</param>
+/// <param name="Package">取得する配布物。なければ null。</param>
 /// <param name="Version">新しい版。読めなければ null。</param>
 /// <param name="IsMandatory">いまの版が必須の下限を割っているか。</param>
 /// <param name="IsUnsupported">いまの版がもう使えないか。</param>
@@ -111,7 +111,7 @@ public static class ManifestVerifier
     /// <param name="signature">デタッチ署名（DER）。</param>
     /// <param name="publicKeyPem">埋め込んである公開鍵。</param>
     /// <param name="currentVersion">いま動いている版。</param>
-    /// <param name="lastGeneratedAt">前回に受け入れたマニフェストの生成時刻。無ければ null。</param>
+    /// <param name="lastGeneratedAt">前回に受け入れたマニフェストの生成時刻。なければ null。</param>
     /// <param name="osBuild">WindowsのビルドID。</param>
     /// <param name="arch">このプロセスのアーキテクチャ。<c>x64</c> など。</param>
     /// <returns>検証の結果。</returns>
@@ -159,7 +159,7 @@ public static class ManifestVerifier
         //
         // 新しい版が出るまで、確認のたびに同じマニフェストが返る。
         // 同じものまで弾くと、取得に1度失敗しただけで二度と取り直さなくなる。
-        // 署名は偽造できないため、同じものを出し直されても中身は変わらず害が無い。
+        // 署名は偽造できないため、同じものを出し直されても中身は変わらず害がない。
         // 巻き戻しとは、署名済みの古いマニフェストを出し直されることであり、それは下で止まる
         if (lastGeneratedAt is { } last && manifest.GeneratedAt < last)
         {
@@ -177,7 +177,7 @@ public static class ManifestVerifier
         }
 
         // 必須と停止の判定は、更新できるかとは別に見る。
-        // 「更新は無いが、いまの版はもう使えない」が成り立つ
+        // 「更新はないが、いまの版はもう使えない」が成り立つ
         var mandatory = IsBelow(currentVersion, channel.MandatoryBelow);
         var unsupported = IsBelow(currentVersion, channel.UnsupportedBelow);
 
@@ -223,7 +223,7 @@ public static class ManifestVerifier
     /// <remarks>
     /// <para>
     /// 曲線はECDSA P-256。
-    /// Ed25519は <c>.NET</c> のBCLに無く、信頼の起点をサードパーティ製のライブラリへ置くのは筋が悪い。
+    /// Ed25519は <c>.NET</c> のBCLになく、信頼の起点をサードパーティ製のライブラリへ置くのは筋が悪い。
     /// </para>
     /// <para>
     /// 署名の形式はDER（<c>openssl dgst -sha256 -sign</c> が出すもの）にそろえる。

@@ -39,7 +39,7 @@ public enum StartupState
 /// 利用者がWindowsの側で無効にしても値は残り、
 /// <c>Explorer\StartupApproved\Run</c> にフラグが書かれるだけである。
 /// 実機で確認したところ、Runの値が残ったまま無効になっている例も、
-/// Runの値が無いのに無効のフラグだけが残っている例もあった。
+/// Runの値がないのに無効のフラグだけが残っている例もあった。
 /// </para>
 /// </remarks>
 public static class StartupRegistration
@@ -119,7 +119,7 @@ public static class StartupRegistration
     /// <remarks>
     /// アンインストールのときに使う。
     /// <see cref="Set"/> と違い実行ファイルの場所を要さないため、
-    /// 消す側の経路で「自分の場所が分からないから消せない」が起こらない。
+    /// 消す側の経路で「自分の場所がわからないから消せない」が起こらない。
     /// フラグを残すと、入れ直したときに無効のまま始まる。
     /// </remarks>
     public static void Remove()

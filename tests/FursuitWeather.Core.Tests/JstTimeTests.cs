@@ -25,7 +25,7 @@ public sealed class JstTimeTests
     [Fact]
     public void 実行するマシンのタイムゾーンに依存しない()
     {
-        // DateTimeOffset.Parse はオフセットが無いときローカルの値を補うため、
+        // DateTimeOffset.Parse はオフセットがないときローカルの値を補うため、
         // 機械のタイムゾーン次第で答えが変わる。こちらはそうならない。
         var ours = JstTime.ToInstant("2026-01-01T00:00");
         Assert.NotNull(ours);

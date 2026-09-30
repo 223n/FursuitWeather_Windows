@@ -45,7 +45,7 @@ jobs:
        (startsWith(github.event.pull_request.head.ref, 'release/') ||
         startsWith(github.event.pull_request.head.ref, 'hotfix/')))
     # セルフホストのランナーがあれば、リポジトリの変数 RUNS_ON にそのラベル（例: self-hosted）を設定する。
-    # 無ければ GitHub がホストする ubuntu-latest で動く
+    # なければ GitHub がホストする ubuntu-latest で動く
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
@@ -61,7 +61,7 @@ jobs:
         # GitHub がホストするランナーには入っている。セルフホストのランナーでは自分で入れる
         run: |
           if ! command -v gh >/dev/null 2>&1; then
-            echo "::error::gh（GitHub CLI）が無い。ランナーに入れてから実行する: https://cli.github.com/"
+            echo "::error::gh（GitHub CLI）がない。ランナーに入れてから実行する: https://cli.github.com/"
             exit 1
           fi
 
@@ -74,7 +74,7 @@ jobs:
           fetch-depth: 0
 
       - name: Nodeを用意
-        # 版を package.json から読むのに使う。セルフホストのランナーに Node が無くても動く
+        # 版を package.json から読むのに使う。セルフホストのランナーに Node がなくても動く
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -157,7 +157,7 @@ jobs:
           #
           # まず下書きで作る。公開するのはインストーラーを添え終えたあとである。
           # 先に公開すると、組み立てが落ちたときに
-          # 「入れる手段の無い、通知済みの Release」が残り、取り消せない
+          # 「入れる手段のない、通知済みの Release」が残り、取り消せない
           args=(--verify-tag --draft --title "${TAG}" --generate-notes)
           if [ "${PRERELEASE}" = 'true' ]; then
             args+=(--prerelease)
@@ -219,12 +219,12 @@ jobs:
             git push origin --delete "${BRANCH}"
             echo "ブランチ ${BRANCH} を消した"
           else
-            echo "ブランチ ${BRANCH} はすでに無い"
+            echo "ブランチ ${BRANCH} はすでにない"
           fi
 
   installer:
     name: インストーラーを作ってReleaseへ添える
-    # Release ができたあとに走らせる。先に走らせると添付先が無い
+    # Release ができたあとに走らせる。先に走らせると添付先がない
     needs: publish
     # GitHub の $/ 構文（自リポジトリ参照）は actionlint 1.7.12 がまだ理解しないため、./ のままにする
     uses: ./.github/workflows/installer.yml # zizmor: ignore[self-repository] actionlint が $/ に未対応

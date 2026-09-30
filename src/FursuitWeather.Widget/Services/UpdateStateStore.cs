@@ -31,7 +31,7 @@ public static class UpdateStateStore
     };
 
     /// <summary>保存してある状態を読む。</summary>
-    /// <returns>読めた状態。無い、または壊れていれば既定の状態。</returns>
+    /// <returns>読めた状態。ない、または壊れていれば既定の状態。</returns>
     public static UpdateState Load()
     {
         try

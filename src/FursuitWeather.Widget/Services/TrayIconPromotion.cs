@@ -16,7 +16,7 @@ namespace FursuitWeather.Widget.Services;
 /// <para>
 /// <b>文書化されていない場所である。</b>
 /// 読めないときや形が変わったときは null を返し、呼び元は「出ていない」とみなす。
-/// ここで分かるのは案内を省いてよいかだけで、アイコンを動かすことはできない。
+/// ここでわかるのは案内を省いてよいかだけで、アイコンを動かすことはできない。
 /// </para>
 /// </remarks>
 public static class TrayIconPromotion
@@ -60,7 +60,7 @@ public static class TrayIconPromotion
                 }
             }
 
-            // 初めての起動では、キーがまだ作られていないことがある
+            // はじめての起動では、キーがまだ作られていないことがある
             return found ? false : null;
         }
         catch (Exception e) when (e is SecurityException or IOException or UnauthorizedAccessException)

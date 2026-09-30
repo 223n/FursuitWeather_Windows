@@ -31,9 +31,9 @@ public sealed class DisplayBandTests
     }
 
     [Fact]
-    public void いまより短い時間が無ければ出さない()
+    public void いまより短い時間がなければ出さない()
     {
-        // いまの行を「最も厳しい時間」として帯に重ねない
+        // いまの行を「もっとも厳しい時間」として帯に重ねない
         var current = Hour("2026-08-15T10:00", 20);
         var forecast = Forecast(current, Hour("2026-08-15T11:00", 20), Hour("2026-08-15T12:00", 30));
 
@@ -70,7 +70,7 @@ public sealed class DisplayBandTests
     }
 
     [Fact]
-    public void いまの行が無ければ先読みの行をそのまま出す()
+    public void いまの行がなければ先読みの行をそのまま出す()
     {
         var forecast = Forecast(Hour("2026-08-15T11:00", 20));
 
@@ -113,7 +113,7 @@ public sealed class DisplayBandTests
     }
 
     [Fact]
-    public void 県名が無ければ発表地域とする()
+    public void 県名がなければ発表地域とする()
     {
         var alert = new HeatAlert { TargetDate = "2026-08-15" };
 
@@ -199,7 +199,7 @@ public sealed class DisplayBandTests
     }
 
     [Fact]
-    public void 何も無ければ注意を出さない()
+    public void 何もなければ注意を出さない()
     {
         var now = At("2026-08-15T12:00");
 
@@ -217,7 +217,7 @@ public sealed class DisplayBandTests
     }
 
     [Fact]
-    public void 選んだモニターが無いことを知らせる()
+    public void 選んだモニターがないことを知らせる()
     {
         var now = At("2026-08-15T12:00");
 

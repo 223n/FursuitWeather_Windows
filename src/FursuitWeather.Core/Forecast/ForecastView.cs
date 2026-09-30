@@ -35,7 +35,7 @@ public static class ForecastView
     /// <para>
     /// <b>本体と同じ規則で選ぶ。</b>
     /// 日本時間の当日の行から、いまの時間の行を選ぶ。
-    /// 無ければ当日の直近の未来の行を選び、それも無ければ選ばない。
+    /// なければ当日の直近の未来の行を選び、それもなければ選ばない。
     /// 本体の <c>pickCurrentHour</c>（<c>public/app.js</c> と <c>public/display.js</c>）と同じである。
     /// </para>
     /// <para>
