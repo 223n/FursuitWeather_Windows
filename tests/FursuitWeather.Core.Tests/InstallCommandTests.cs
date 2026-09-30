@@ -101,7 +101,7 @@ public sealed class InstallCommandTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void PIDが無い値なら弾く(int processId)
+    public void PIDがない値なら弾く(int processId)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => InstallCommand.BuildArguments(InstallDir, processId, null));

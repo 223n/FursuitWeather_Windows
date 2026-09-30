@@ -421,7 +421,7 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 先読みの窓のうち最も厳しい時間を選ぶ()
+    public void 先読みの窓のうちもっとも厳しい時間を選ぶ()
     {
         var now = At("2026-08-15T10:30");
         var forecast = Forecast(now,
@@ -822,7 +822,7 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 基準が無くても直前の値でわずかな改善を退ける()
+    public void 基準がなくても直前の値でわずかな改善を退ける()
     {
         // 基準がないことを「デッドバンド合格」と読んではいけない
         var now = At("2026-08-15T16:20");
@@ -837,7 +837,7 @@ public sealed class ChangeDetectorTests
     }
 
     [Fact]
-    public void 基準が無くても十分下がれば回復を認める()
+    public void 基準がなくても十分下がれば回復を認める()
     {
         var now = At("2026-08-15T16:20");
         var state = Baseline(now.AddMinutes(-11), 0, "danger", suitWbgt: 35d, discontinuedAt: null);

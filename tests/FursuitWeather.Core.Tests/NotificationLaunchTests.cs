@@ -38,13 +38,13 @@ public sealed class NotificationLaunchTests
     [InlineData("--update-manifest-url=https://github.com/223n/FursuitWeather_Windows/releases/download/v0.3.0/update.json")]
     [InlineData("AppNotificationActivated")]
     [InlineData("----appnotificationactivated:")]
-    public void 通知と関係の無い引数では通常の起動とする(string argument)
+    public void 通知と関係のない引数では通常の起動とする(string argument)
     {
         Assert.Equal(LaunchSource.Normal, NotificationLaunch.Classify(false, [Exe, argument]));
     }
 
     [Fact]
-    public void 引数が無ければ通常の起動とする()
+    public void 引数がなければ通常の起動とする()
     {
         Assert.Equal(LaunchSource.Normal, NotificationLaunch.Classify(false, [Exe]));
     }
@@ -52,7 +52,7 @@ public sealed class NotificationLaunchTests
     // ---- トレイの案内
 
     [Fact]
-    public void 初めての起動で表に出ていなければ案内する()
+    public void はじめての起動で表に出ていなければ案内する()
     {
         Assert.Equal(TrayGuideAction.Show, TrayGuide.Decide(false, false, true, false));
     }

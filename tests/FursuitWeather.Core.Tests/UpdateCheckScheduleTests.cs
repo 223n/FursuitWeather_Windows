@@ -345,7 +345,7 @@ public sealed class UpdateCheckScheduleTests
     }
 
     [Fact]
-    public void 答えの無かった確認のあとは待ちが明けるまで待つ()
+    public void 答えのなかった確認のあとは待ちが明けるまで待つ()
     {
         var lastTick = TimeSpan.FromMinutes(10);
 
@@ -373,7 +373,7 @@ public sealed class UpdateCheckScheduleTests
     }
 
     [Fact]
-    public void 答えの無かった確認が無ければ待たない()
+    public void 答えのなかった確認がなければ待たない()
     {
         Assert.False(UpdateCheckSchedule.IsWaitingAfterUnanswered(0, null, null, Now, TimeSpan.Zero));
     }

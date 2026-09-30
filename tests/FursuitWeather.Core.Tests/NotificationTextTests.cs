@@ -116,7 +116,7 @@ public sealed class NotificationTextTests
     }
 
     [Fact]
-    public void 前のラベルが無くても矢印だけが残らない()
+    public void 前のラベルがなくても矢印だけが残らない()
     {
         // 古い保存内容から読むとラベルが空になる。
         // そこで「 → 厳重警戒」のような文面を作らない
@@ -170,7 +170,7 @@ public sealed class NotificationTextTests
     }
 
     [Fact]
-    public void 県名が無くても空のかっこを出さない()
+    public void 県名がなくても空のかっこを出さない()
     {
         var message = NotificationText.Build(Change(NotificationKind.OfficialAlert), Place, alert: null);
 
@@ -224,7 +224,7 @@ public sealed class NotificationTextTests
     }
 
     [Fact]
-    public void 適した時間帯が無いことをはっきり伝える()
+    public void 適した時間帯がないことをはっきり伝える()
     {
         var message = NotificationText.Build(Briefing(hours: []), Place);
 

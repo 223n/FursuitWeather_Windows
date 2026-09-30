@@ -257,7 +257,7 @@ public sealed class NotificationPlannerTests
     }
 
     [Fact]
-    public void 基準が無いことを黙らせない()
+    public void 基準がないことを黙らせない()
     {
         var text = NotificationPlanner.Describe(new NotificationState(), At("2026-08-15T15:30"));
 
